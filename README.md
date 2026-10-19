@@ -12,7 +12,9 @@ broken relationships between channels, and they never say *why*. sathealth combi
 ensemble of detectors with an explainability layer, so each alert says which channel, when
 the problem started, which dependency broke and what normal would have looked like.
 
-> **Status: Phase 6 (operations service and console) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md) and
+> **Status: all seven phases complete.** The Phase 4 gains on SMAP did **not** replicate on an
+> independent spacecraft (ESA OPS-SAT, pre-registered): see
+> [docs/CONFIRMATION.md](docs/CONFIRMATION.md). See [docs/ROADMAP.md](docs/ROADMAP.md) and
 > the results in [BASELINES.md](docs/BASELINES.md) (detectors),
 > [DECISION.md](docs/DECISION.md) (alarms) and [EXPLAINABILITY.md](docs/EXPLAINABILITY.md)
 > (explanations).
@@ -31,6 +33,7 @@ make ablation    # every decision-layer variant on saved scores → docs/DECISIO
 make explain     # explain live alarms + evaluate → docs/EXPLAINABILITY.md (~10 min first time)
 make serve       # operator console on http://127.0.0.1:8000 (API docs at /docs)
 make demo        # headless: replay → explained alert → operator verdict stored
+make confirm     # one-shot pre-registered test on ESA OPS-SAT → docs/CONFIRMATION.md (~12 min)
 make check       # ruff + mypy --strict + unit tests
 make test-data   # integration tests against the real dataset
 ```
@@ -115,10 +118,30 @@ type and evidence ([ADR 0006](docs/adr/0006-decision-layer.md),
 - **We found why: the validation-to-test shift.** "Once in 1,000 nominal steps" fires on 7–20%
   of nominal test steps. That is visible without labels, and it holds even for the z-score.
 - **Methods that adapt to the stream beat the limit check on SMAP with 2–4× fewer false
-  alarms.** The live variant was designed after seeing results, so it will be confirmed on
-  an independent dataset in Phase 7.
+  alarms.** The live variant was designed after seeing results, so it was tested once on an
+  independent spacecraft in Phase 7 — and **did not replicate** (see below).
 - **Anomaly type** (point vs contextual) matches the labels 80% of the time (majority class:
   68%).
+
+## Independent confirmation and extensions (Phase 7)
+
+The Phase 4 results were tested once, with every setting fixed in advance, on a different
+spacecraft: ESA's OPS-SAT cubesat (OPSSAT-AD, CC-BY-4.0; [ADR 0009](docs/adr/0009-extensions-and-confirmation.md)).
+
+| Pre-registered hypothesis | Result on OPS-SAT | Verdict |
+|---|---|---|
+| The live pipeline beats the best baseline | −0.254 composite F1 vs robust z-score, 95% CI [−0.364, −0.128] | **not supported** |
+| The Telemanom reference beats the best baseline | +0.016, 95% CI [−0.079, +0.135] | **not supported** |
+| Priming removes the start-up transient on SMAP/MSL | start-up events 19 → 32 | **not supported** |
+
+**What this means:** on SMAP the deep, adaptive pipeline is the strongest; on OPS-SAT a robust
+z-score is as good as anything here. Gains on one benchmark are not a property of the method.
+For a new mission: start with the simple baseline, run the deep pipeline in shadow mode, and
+let operator verdicts decide ([CONFIRMATION.md](docs/CONFIRMATION.md), [PRIMING.md](docs/PRIMING.md)).
+
+Also added: **operator re-baselining** (accept a confirmed permanent shift as the new normal,
+audited), a **label-free drift monitor** in the console, and a measured **edge feasibility
+check** (int8 shrinks the LSTM 3.4×, but runs slower on a laptop CPU; target hardware decides).
 
 ## Operator console (Phase 6)
 

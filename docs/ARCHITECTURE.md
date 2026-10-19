@@ -4,8 +4,9 @@ The target system has six layers. **Phase 1 implements L2** (ingest and preproce
 the NASA SMAP/MSL benchmark. **Phase 2 adds the evaluation harness and the L3 statistical
 baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder) **,
 Phase 4 the L4 decision layer** (EVT calibration, fusion, alarms, events) **, Phase 5 the
-L5 explanation engine** (onset, counterfactual, attribution, grounded narrative) **and Phase 6
-the L6 operations service** (live decisions, health, API, console, feedback).
+L5 explanation engine** (onset, counterfactual, attribution, grounded narrative) **, Phase 6
+the L6 operations service** (live decisions, health, API, console, feedback) **and Phase 7 an
+independent confirmation on ESA OPS-SAT plus re-baselining and drift monitoring**.
 The other layers arrive in the phases listed in
 [ROADMAP.md](ROADMAP.md).
 
@@ -91,6 +92,8 @@ load_prepared() ───────► PreparedChannel.windows()    zero-copy 
 | `sathealth.explain` | Onset, counterfactual rollout and band, Integrated Gradients, grounded narrative and checker, optional grounded LLM rewording |
 | `sathealth.pipeline.explain` | Verified model rebuild and cache; per-event explanations (JSON, Markdown, arrays) |
 | `sathealth.pipeline.explain_eval` / `explain_report` | Pre-registered evaluation (E1–E4) → `docs/EXPLAINABILITY.md` |
-| `sathealth.ops` | `StreamingDecider` (step-by-step decision layer, exact batch parity), health index, trend extrapolation |
+| `sathealth.ops` | `StreamingDecider` (step-by-step decision layer, exact batch parity, operator re-baselining), health index, trend extrapolation, drift monitor |
+| `sathealth.data.opssat` | OPSSAT-AD loader: segments in time order, nominal-only training, per-segment scaling |
+| `sathealth.pipeline.confirm` / `priming` | Pre-registered one-shot confirmation on OPS-SAT; start-up priming test |
 | `sathealth.service` | SQLite store, replay engine, FastAPI app with SSE, web console, headless demo |
-| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / explain / explain-report / serve / demo / leaderboard / info` |
+| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / explain / explain-report / confirm / priming / serve / demo / leaderboard / info` |
