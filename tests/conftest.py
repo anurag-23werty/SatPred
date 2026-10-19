@@ -96,3 +96,37 @@ def explain_config(raw_root: Path, raw_manifest: Manifest, tmp_path: Path) -> Co
     evaluate_detector(cfg, "lstm")
     decide(cfg)
     return cfg
+
+
+def _write_opssat(path: Path, seed: int = 0) -> Path:
+    """Two synthetic channels in the OPSSAT-AD layout: ``CH-A`` with segments long enough for
+    the models, ``CH-B`` with only short segments."""
+    rng = np.random.default_rng(seed)
+    lines = ["channel,timestamp,value,label,sampling,anomaly,segment,train"]
+    seg_id = 0
+    for chan, n_segments, length in (("CH-A", 40, 90), ("CH-B", 6, 10)):
+        for k in range(n_segments):
+            seg_id += 1
+            anomaly = k % 5 == 4
+            train = k % 4 != 3
+            t = np.arange(length)
+            values = np.sin(t / 6) + 0.05 * rng.normal(size=length)
+            if anomaly:
+                values[length // 2 : length // 2 + 8] += 3.0
+            day = 1 + k // 10
+            for i, v in enumerate(values):
+                stamp = f"2022-06-{day:02d}T{(k % 10):02d}:{i // 60:02d}:{i % 60:02d}.000Z"
+                lines.append(
+                    f"{chan},{stamp},{v:.6f},{'anomaly' if anomaly else 'normal'},1,"
+                    f"{int(anomaly)},{seg_id},{int(train)}"
+                )
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+@pytest.fixture
+def opssat_csv(tmp_path: Path) -> Path:
+    """A synthetic ``segments.csv`` in the OPSSAT-AD layout (see ``_write_opssat``)."""
+    raw = tmp_path / "opssat"
+    raw.mkdir()
+    return _write_opssat(raw / "segments.csv")

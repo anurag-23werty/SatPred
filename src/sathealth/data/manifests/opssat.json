@@ -1,0 +1,19 @@
+{
+  "name": "opssat",
+  "description": "OPSSAT-AD: labelled telemetry segments of ESA's OPS-SAT cubesat (Ruszczak et al., Scientific Data 2025).",
+  "source": {
+    "paper": "https://arxiv.org/abs/2407.04730",
+    "zenodo": "https://doi.org/10.5281/zenodo.15108715",
+    "license": "CC-BY-4.0",
+    "zenodo_md5": {"segments.csv": "72f109630abb933a386106897a631188"},
+    "pinned_on": "2026-10-20"
+  },
+  "base_url": "https://zenodo.org/records/15108715/files",
+  "files": [
+    {
+      "path": "segments.csv",
+      "size": 18987091,
+      "sha256": "d5201e9e751eb2a53a0ff7c11567dc4239f594ea4b479b2aa66fe67ddcbcb9ba"
+    }
+  ]
+}
