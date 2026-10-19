@@ -1867,15 +1867,17 @@ wheels = [
 
 [[package]]
 name = "sathealth"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -1888,6 +1890,7 @@ tracking = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx2" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -1899,6 +1902,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'llm'", specifier = ">=1,<2" },
+    { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=2.14,<4" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pydantic", specifier = ">=2.6,<3" },
@@ -1906,11 +1910,13 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.5,<2" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.5,<3" },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 provides-extras = ["tracking", "llm"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "httpx2", specifier = ">=2" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pre-commit", specifier = ">=3.7" },
     { name = "pytest", specifier = ">=8.2" },
