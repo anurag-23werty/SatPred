@@ -143,6 +143,11 @@ async function refreshHealth() {
     ]);
   });
   $("subsystems").replaceChildren(...tiles);
+  const drift = (await api("/api/drift")).filter((d) => d.drifting);
+  $("drift").replaceChildren(
+    el("b", { text: `${drift.length} channel${drift.length === 1 ? "" : "s"} drifting` }),
+    el("span", { text: drift.length ? `: ${drift.map((d) => d.chan_id).join(", ")} (value shift or a sustained alarm; label-free)` : " (label-free monitor)" }),
+  );
 }
 
 // --- alerts -----------------------------------------------------------------------------
@@ -247,6 +252,19 @@ $("verdict-form").addEventListener("submit", async (ev) => {
   await Promise.all([refreshVerdicts(state.selected), refreshAlerts()]);
 });
 
+$("rebaseline").addEventListener("click", async () => {
+  if (state.selected === null) return;
+  const operator = $("operator").value.trim();
+  if (!operator) { $("rebaseline-status").textContent = "Enter your operator name first."; return; }
+  const event = await api(`/api/events/${state.selected}`);
+  const result = await api(`/api/channels/${encodeURIComponent(event.chan_id)}/rebaseline`, {
+    method: "POST",
+    body: JSON.stringify({ operator, note: $("note").value }),
+  });
+  $("rebaseline-status").textContent = `Re-baselined ${result.chan_id} at step ${result.step} on its last ${result.steps} steps.`;
+  await Promise.all([refreshAlerts(), refreshHealth()]);
+});
+
 // --- replay controls and live stream -----------------------------------------------------
 
 function showStatus(s) {
@@ -294,6 +312,7 @@ function connect() {
   source.addEventListener("status", (msg) => { showStatus(JSON.parse(msg.data)); healthSoon(); });
   source.addEventListener("alert", () => { alertsSoon(); healthSoon(); });
   source.addEventListener("verdict", alertsSoon);
+  source.addEventListener("rebaseline", () => { alertsSoon(); healthSoon(); });
 }
 
 async function tickSelected() {

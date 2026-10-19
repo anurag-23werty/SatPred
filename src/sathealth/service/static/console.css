@@ -97,3 +97,5 @@ figcaption { font-size: 12px; color: var(--ink-2); margin-bottom: 2px; }
 .label-span { fill: var(--ink-2); opacity: .12; }
 .threshold { stroke: var(--critical); stroke-dasharray: 4 3; }
 .crosshair { stroke: var(--ink-2); stroke-width: 1; }
+.drift { margin-top: 12px; font-size: 12px; color: var(--ink-2); }
+.drift b { color: var(--ink); }

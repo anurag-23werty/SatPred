@@ -34,6 +34,7 @@
         <small id="lowest" class="muted"></small>
       </div>
       <div id="subsystems" class="tiles"></div>
+      <div id="drift" class="drift"></div>
       <p class="note">Health = 100 × (1 − severity-weighted share of the last 500 steps in alarm).
         Subsystem = weakest channel of its family. Trends are extrapolations, not remaining-life
         predictions.</p>
@@ -83,6 +84,12 @@
           </div>
         </form>
         <ul id="verdicts" class="verdicts"></ul>
+        <h3>Permanent shift?</h3>
+        <p class="note">If the operator confirms the channel now operates at a new level, accept its
+          last steps as the new normal. Alarms on it stop until it deviates again; the action is
+          audited.</p>
+        <button id="rebaseline" type="button">Accept new normal for this channel</button>
+        <span id="rebaseline-status" class="muted"></span>
       </div>
     </section>
   </main>

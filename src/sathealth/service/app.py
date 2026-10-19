@@ -73,6 +73,11 @@ class StepRequest(BaseModel):
     steps: int = Field(default=1, ge=1, le=100_000)
 
 
+class RebaselineRequest(BaseModel):
+    operator: str = Field(min_length=1, max_length=64)
+    note: str = Field(default="", max_length=2000)
+
+
 class VerdictRequest(BaseModel):
     verdict: Literal["confirmed", "false_alarm", "unsure"]
     operator: str = Field(min_length=1, max_length=64)
@@ -256,6 +261,28 @@ def create_app(config: Config | None = None) -> FastAPI:
             return engine().telemetry(chan_id, window)
         except KeyError as exc:
             raise HTTPException(404, str(exc)) from exc
+
+    @app.get("/api/drift", tags=["health"])
+    def drift() -> list[dict[str, Any]]:
+        return engine().drift()
+
+    @app.post("/api/channels/{chan_id}/rebaseline", status_code=201, tags=["health"])
+    def rebaseline(chan_id: str, body: RebaselineRequest) -> dict[str, Any]:
+        """Operator decision: the channel's recent behaviour is its new normal."""
+        try:
+            result = engine().rebaseline(chan_id, body.operator, body.note)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        for update in result["updates"]:
+            app.state.broker.publish("alert", update)
+        app.state.broker.publish("rebaseline", {"chan_id": chan_id, "step": result["step"]})
+        return result
+
+    @app.get("/api/channels/{chan_id}/rebaselines", tags=["health"])
+    def rebaselines(chan_id: str) -> list[dict[str, Any]]:
+        return store().rebaselines(chan_id)
 
     @app.get("/api/health", tags=["health"])
     def health() -> dict[str, Any]:

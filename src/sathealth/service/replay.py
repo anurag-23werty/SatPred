@@ -25,6 +25,7 @@ from sathealth.decision.events import Event, outside_range
 from sathealth.detectors.lstm import LSTMDetector
 from sathealth.explain.counterfactual import HorizonBand
 from sathealth.logging import get_logger
+from sathealth.ops.drift import DriftMonitor
 from sathealth.ops.health import HealthTracker, step_weight, subsystem, time_to_threshold
 from sathealth.ops.streaming import StreamingDecider
 from sathealth.pipeline.evaluate import evaluation_dir_for
@@ -51,6 +52,7 @@ class ChannelFeed:
     out_of_range: BoolArray
     values: FloatArray  # first value column, dataset units
     labels: BoolArray
+    train_values: FloatArray  # first value column of the training split, dataset units
 
     @property
     def length(self) -> int:
@@ -73,7 +75,10 @@ def load_feed(config: Config, chan_id: str) -> ChannelFeed:
     oor = outside_range(channel.test[:, cols], train.min(axis=0), train.max(axis=0), d.point_margin)
     p = channel.scaler
     values = channel.test[:, cols[0]] * p.scale[0] + p.center[0]
-    return ChannelFeed(chan_id, channel.spacecraft, val, test, oor, values, channel.test_labels)
+    train_values = channel.train[:, cols[0]] * p.scale[0] + p.center[0]
+    return ChannelFeed(
+        chan_id, channel.spacecraft, val, test, oor, values, channel.test_labels, train_values
+    )
 
 
 @dataclass
@@ -81,6 +86,7 @@ class _ChannelState:
     feed: ChannelFeed
     decider: StreamingDecider
     health: HealthTracker
+    drift: DriftMonitor
     alarm: list[bool] = field(default_factory=list)
     open_ids: dict[int, int] = field(default_factory=dict)  # event start -> event id
 
@@ -135,6 +141,7 @@ class ReplayEngine:
                     feed,
                     StreamingDecider(self.config.decision, feed.val),
                     HealthTracker(s.health_window, s.health_sample_every),
+                    DriftMonitor(feed.train_values, s.drift_window),
                 )
             self._states = states
             self.step = 0
@@ -181,6 +188,7 @@ class ReplayEngine:
         )
         st.alarm.append(result.alarm)
         st.health.update(step_weight(result.fused, result.alarm, self.config.decision))
+        st.drift.update(float(feed.values[t]), result.alarm)
         updates = self._close(replay_id, chan, st, result.closed, t)
         if result.opened is not None:
             event_id = self.store.open_event(replay_id, chan, feed.spacecraft, result.opened)
@@ -236,6 +244,7 @@ class ReplayEngine:
                     "health": st.health.index,
                     "in_alarm": st.health.in_alarm,
                     "open_events": len(st.open_ids),
+                    "drifting": st.drift.report().drifting,
                 }
                 for chan, st in self._states.items()
             ]
@@ -279,6 +288,37 @@ class ReplayEngine:
             "total_channels": len(channels),
             "subsystems": subsystems,
             "channels": channels,
+        }
+
+    def drift(self) -> list[dict[str, Any]]:
+        """Label-free drift report per channel (ADR 0009 D)."""
+        with self._lock:
+            return [
+                {"chan_id": chan, **dataclasses.asdict(st.drift.report())}
+                for chan, st in self._states.items()
+            ]
+
+    def rebaseline(self, chan: str, operator: str, note: str = "") -> dict[str, Any]:
+        """Accept the channel's recent behaviour as its new normal (operator decision)."""
+        steps = self.config.service.rebaseline_steps
+        with self._lock:
+            st = self._states.get(chan)
+            if st is None or self.replay_id is None:
+                raise KeyError(f"channel {chan!r} is not in this replay")
+            closed = st.decider.rebaseline(steps)
+            updates = self._close(self.replay_id, chan, st, closed, max(self.step - 1, 0))
+            closed_id = updates[0]["event_id"] if updates else None
+            audit_id = self.store.add_rebaseline(
+                self.replay_id, chan, self.step, steps, operator, note, closed_id
+            )
+        log.info("re-baselined", channel=chan, operator=operator, step=self.step)
+        return {
+            "id": audit_id,
+            "chan_id": chan,
+            "step": self.step,
+            "steps": steps,
+            "closed_event_id": closed_id,
+            "updates": updates,
         }
 
     def telemetry(self, chan: str, window: int = 600) -> dict[str, Any]:

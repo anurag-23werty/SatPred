@@ -216,3 +216,22 @@ def test_demo_runs_the_exit_criterion(config: Config, tmp_path: Path) -> None:
     assert result.stored_verdict["verdict"] == "confirmed"
     assert result.stored_verdict["event_id"] == result.first_alert["event_id"]
     assert result.channel_steps_per_second > 0
+
+
+def test_drift_and_rebaseline_endpoints(client: TestClient) -> None:
+    client.post("/api/replay", json={"run": False})
+    client.post("/api/replay/step", json={"steps": 200})
+    drift = client.get("/api/drift").json()
+    assert {d["chan_id"] for d in drift} == {"A-1", "C-1", "M-1"}
+    assert all({"psi", "alarm_share", "drifting", "reasons"} <= d.keys() for d in drift)
+    assert "drifting" in client.get("/api/channels").json()[0]
+    done = client.post("/api/channels/A-1/rebaseline", json={"operator": "op", "note": "new mode"})
+    assert done.status_code == 201
+    assert done.json()["steps"] == 500
+    audit = client.get("/api/channels/A-1/rebaselines").json()
+    assert [(a["operator"], a["note"], a["step"]) for a in audit] == [("op", "new mode", 200)]
+    assert client.post("/api/channels/Z-9/rebaseline", json={"operator": "op"}).status_code == 404
+    assert client.post("/api/channels/A-1/rebaseline", json={"operator": ""}).status_code == 422
+    client.post("/api/replay", json={"run": False})
+    early = client.post("/api/channels/A-1/rebaseline", json={"operator": "op"})
+    assert early.status_code == 409, "too little history to re-baseline on"
