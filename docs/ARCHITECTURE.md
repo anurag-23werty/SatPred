@@ -2,7 +2,8 @@
 
 The target system has six layers. **Phase 1 implements L2** (ingest and preprocessing) for
 the NASA SMAP/MSL benchmark. **Phase 2 adds the evaluation harness and the L3 statistical
-baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder).
+baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder) **and
+Phase 4 the L4 decision layer** (EVT calibration, fusion, alarms, events).
 The other layers arrive in the phases listed in
 [ROADMAP.md](ROADMAP.md).
 
@@ -24,7 +25,7 @@ flowchart TB
         M4[Graph Deviation Network]
     end
     subgraph L4[L4 · Scoring & decision]
-        NORM[ECDF normalisation] --> THR[EVT-POT + NDT threshold] --> FUSE[Fusion<br/>≥2 detectors] --> EVT[Event builder] --> SEV[Severity + type]
+        NORM[EVT calibration<br/>surprise = −log10 p] --> FUSE[Fusion<br/>mean surprise] --> THR[Alarm rule<br/>hysteresis · streaming recalibration] --> EVT[Event builder] --> SEV[Severity + type]
     end
     subgraph L5[L5 · Explain & prognose]
         XAI[XAI engine<br/>attribution · onset · broken edges ·<br/>counterfactual band · grounded narrator]
@@ -82,4 +83,7 @@ load_prepared() ───────► PreparedChannel.windows()    zero-copy 
 | `sathealth.pipeline.evaluate` | Atomic, fingerprinted evaluation runs with saved scores; parallel over channels |
 | `sathealth.pipeline.leaderboard` | `docs/BASELINES.md` generator with paired comparisons vs the best baseline |
 | `sathealth.pipeline.tracking` | Optional MLflow logging of finished runs |
-| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / leaderboard / info` |
+| `sathealth.decision` | EVT tail calibration, fusion, hysteresis and dynamic-threshold alarms, streaming recalibration, events with severity and type |
+| `sathealth.pipeline.decide` | Decision runs on saved scores: events, fused surprise, diagnostics, global oracle |
+| `sathealth.pipeline.ablation` | Pre-registered decision variants → `docs/DECISION.md` |
+| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / leaderboard / info` |

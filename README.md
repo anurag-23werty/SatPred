@@ -12,8 +12,9 @@ broken relationships between channels, and they never say *why*. sathealth combi
 ensemble of detectors with an explainability layer, so each alert says which channel, when
 the problem started, which dependency broke and what normal would have looked like.
 
-> **Status: Phase 3 (deep detectors) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md) and
-> the results in [docs/BASELINES.md](docs/BASELINES.md).
+> **Status: Phase 4 (decision layer) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md), the
+> detector results in [docs/BASELINES.md](docs/BASELINES.md) and the decision-layer results
+> in [docs/DECISION.md](docs/DECISION.md).
 
 ## Quickstart
 
@@ -25,6 +26,7 @@ make download    # NASA SMAP/MSL, 165 files / 173 MB, every file SHA-256 verifie
 make prepare     # validate → split → scale → data/processed/telemanom-<fingerprint>/
 make evaluate-baselines  # classical baselines (~20 s)
 make leaderboard # every detector incl. deep models → docs/BASELINES.md (~1 h on 4 cores)
+make ablation    # every decision-layer variant on saved scores → docs/DECISION.md (seconds)
 make check       # ruff + mypy --strict + unit tests
 make test-data   # integration tests against the real dataset
 ```
@@ -43,6 +45,11 @@ y = channel.test_window_labels(size=100)  # (N_test,) bool
 Deep models train one network per channel on CPU. `sathealth evaluate lstm --jobs 7` spreads
 channels over 7 processes; results are bit-identical for any `--jobs` value. To also log runs
 to MLflow: `uv sync --extra tracking`, then add `--set tracking.mlflow_uri=file:./mlruns`.
+
+The decision layer runs on saved scores in seconds: `sathealth decide` runs the pre-registered
+pipeline, and `sathealth decide --config configs/live.yaml` the live pipeline with streaming
+recalibration. Each run writes operator-facing events (span, peak, severity, point or
+contextual type, per-detector evidence) to `runs/decisions/<name>-<fingerprint>/events/`.
 
 Every command accepts `--config` and `--set key.sub=value`, for example
 `sathealth prepare --set dataset.spacecraft=[SMAP] --set preprocess.scaler=standard`.
@@ -84,6 +91,31 @@ What Phase 3 showed ([ADR 0005](docs/adr/0005-deep-detectors.md)):
 - **Random scores beat every real detector on point-adjusted F1**, which is why we don't
   headline it.
 
+## Decision layer (Phase 4)
+
+Phase 4 turns scores into alarms an operator can act on: EVT calibration to a common
+"surprise" scale, fusion of the LSTM and Transformer, hysteresis, and events with severity,
+type and evidence ([ADR 0006](docs/adr/0006-decision-layer.md),
+[full results](docs/DECISION.md)). The primary pipeline and the alarm budget were
+**pre-registered** before any result.
+
+| Pipeline | Composite F1, all / SMAP | Δ vs limit check on SMAP [paired 95% CI] | False events / 1k steps |
+|---|---|---|---:|
+| Limit check (today's practice) | 0.458 / 0.475 | — | 1.03 |
+| Primary, pre-registered | 0.459 / 0.502 | +0.028 [−0.086, +0.146] | 1.30 |
+| Telemanom dynamic threshold (batch) | 0.578 / 0.641 | +0.166 [+0.029, +0.317] | 0.43 |
+| Streaming recalibration (live, **post-hoc**) | 0.531 / 0.623 | +0.148 [+0.047, +0.279] | 0.23 |
+
+- **The pre-registered criterion is not met**, and we report that rather than tune on test
+  labels.
+- **We found why: the validation-to-test shift.** "Once in 1,000 nominal steps" fires on 7–20%
+  of nominal test steps. That is visible without labels, and it holds even for the z-score.
+- **Methods that adapt to the stream beat the limit check on SMAP with 2–4× fewer false
+  alarms.** The live variant was designed after seeing results, so it will be confirmed on
+  an independent dataset in Phase 7.
+- **Anomaly type** (point vs contextual) matches the labels 80% of the time (majority class:
+  68%).
+
 ## What we found in the data
 
 - The original NASA archive is offline (HTTP 403). A naive parallel download **silently
@@ -99,7 +131,7 @@ Full details are in [docs/DATA_CARD.md](docs/DATA_CARD.md).
 ## Repository layout
 
 ```
-configs/           YAML configs (default.yaml)
+configs/           YAML configs (default.yaml, live.yaml)
 docs/              architecture, roadmap, data card, ADRs
 scripts/           maintainer tools (manifest builder, README banner)
 src/sathealth/
@@ -109,8 +141,9 @@ src/sathealth/
   features/        validation, scaling, windowing
   evaluation/      metrics, label-free thresholds, aggregation + bootstrap CIs
   detectors/       limit check, robust z-score, Isolation Forest, random, LSTM, Transformer
+  decision/        EVT calibration, fusion, alarm rules, streaming recalibration, events
   models/          PyTorch networks, training loop, device and seeding, error smoothing
-  pipeline/        prepare, evaluate, data card, leaderboard, MLflow tracking
+  pipeline/        prepare, evaluate, decide, ablation, data card, leaderboard, tracking
   utils/           hashing, seeding, provenance
 tests/             unit tests + integration/ (real data, `-m data`)
 ```
