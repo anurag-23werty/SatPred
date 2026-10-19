@@ -21,16 +21,13 @@ Guarantees:
 
 import json
 import shutil
-import subprocess
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from sathealth import __version__
 from sathealth.config import Config
 from sathealth.data.download import Manifest, load_manifest, verify_dataset
 from sathealth.data.schema import AnomalyKind, AnomalySegment, BoolArray, FloatArray
@@ -40,6 +37,7 @@ from sathealth.features.validation import QualityReport, validate_dataset
 from sathealth.features.windowing import chronological_split, sliding_windows, window_labels
 from sathealth.logging import get_logger
 from sathealth.utils.hashing import fingerprint
+from sathealth.utils.provenance import provenance
 
 log = get_logger(__name__)
 
@@ -101,25 +99,6 @@ def run_dir_for(config: Config) -> Path:
     return config.paths.processed_dir / f"{config.dataset.name}-{data_fingerprint(config)}"
 
 
-def _git_state() -> dict[str, Any]:
-    try:
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=5
-        ).stdout.strip()
-        dirty = bool(
-            subprocess.run(
-                ["git", "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=5,
-            ).stdout.strip()
-        )
-    except (OSError, subprocess.SubprocessError):
-        return {"commit": None, "dirty": None}
-    return {"commit": commit, "dirty": dirty}
-
-
 def _manifest_digest(manifest: Manifest) -> str:
     return fingerprint([(f.path, f.size, f.sha256) for f in manifest.files], length=64)
 
@@ -174,9 +153,7 @@ def prepare_dataset(
 
         run_manifest = {
             "run_id": run_dir.name,
-            "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "sathealth_version": __version__,
-            "git": _git_state(),
+            **provenance(),
             "config": config.to_dict(),
             "data_fingerprint": data_fingerprint(config),
             "raw": {
