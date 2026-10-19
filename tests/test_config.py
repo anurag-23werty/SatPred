@@ -103,3 +103,12 @@ def test_live_profile_only_adds_streaming_recalibration() -> None:
     assert live.decision.model_dump(exclude={"name", "recalibrate_every"}) == (
         load_config(DEFAULT).decision.model_dump(exclude={"name", "recalibrate_every"})
     )
+
+
+def test_explain_settings() -> None:
+    cfg = load_config(DEFAULT, overrides=["explain.horizon=100"])
+    assert cfg.explain.horizon == 100
+    assert cfg.explain.band_level == 0.9
+    assert cfg.paths.models_dir.name == "models"
+    with pytest.raises(ValidationError):
+        load_config(None, overrides=["explain.band_level=0.2"])

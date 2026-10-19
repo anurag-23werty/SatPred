@@ -39,6 +39,8 @@ class PathsConfig(_Strict):
     processed_dir: Path = Path("data/processed")
     runs_dir: Path = Path("runs/evaluations")
     decisions_dir: Path = Path("runs/decisions")
+    models_dir: Path = Path("runs/models")
+    explanations_dir: Path = Path("runs/explanations")
 
 
 class DatasetConfig(_Strict):
@@ -255,6 +257,34 @@ class DecisionConfig(_Strict):
         return self
 
 
+class ExplainConfig(_Strict):
+    """Explanations of alarm events; see docs/adr/0007-explainability.md (pre-registered)."""
+
+    onset_level: float = Field(default=1.0, gt=0, description="Surprise the onset walks back on.")
+    onset_lookback: int = Field(default=500, ge=1)
+    horizon: int = Field(default=250, ge=10, description="Counterfactual rollout length.")
+    band_level: float = Field(default=0.9, gt=0.5, lt=1.0, description="Counterfactual band.")
+    band_starts: int = Field(default=50, ge=5, description="Rollouts used to calibrate the band.")
+    ig_steps: int = Field(default=64, ge=8, description="Integrated Gradients path steps.")
+    verify_tolerance: float = Field(
+        default=1e-4, gt=0, description="Max |rebuilt - saved| validation score difference."
+    )
+    llm: bool = Field(
+        default=False,
+        description="Also reword each narrative with Claude; kept only if it passes the "
+        "grounding check. Needs the `llm` extra and Anthropic credentials.",
+    )
+    llm_model: str = "claude-opus-5-5"
+    eval_channels_per_spacecraft: int = Field(default=5, ge=1)
+    eval_injections: int = Field(default=20, ge=1)
+    eval_spike: float = Field(default=3.0, gt=0, description="Injected value spike (scaled).")
+    eval_min_effect: float = Field(
+        default=0.05, ge=0, description="Command injections must move the forecast this much."
+    )
+    eval_deletion_fraction: float = Field(default=0.05, gt=0, lt=1)
+    eval_coverage_horizon: int = Field(default=100, ge=10)
+
+
 class Config(_Strict):
     seed: int = 42
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -269,6 +299,7 @@ class Config(_Strict):
     deep: DeepConfig = DeepConfig()
     tracking: TrackingConfig = TrackingConfig()
     decision: DecisionConfig = DecisionConfig()
+    explain: ExplainConfig = ExplainConfig()
 
     @model_validator(mode="after")
     def _check_columns(self) -> "Config":
