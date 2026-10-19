@@ -59,3 +59,13 @@ def test_struct_logger_emits_fields(caplog: pytest.LogCaptureFixture) -> None:
         assert caplog.records[-1].sathealth_fields == {"channel": "A-1"}
     finally:
         logger.propagate = False
+
+
+def test_log_handler_follows_swapped_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+
+    configure_logging("INFO")
+    replacement = io.StringIO()
+    monkeypatch.setattr("sys.stderr", replacement)
+    get_logger("sathealth.test").info("after swap", ok=True)
+    assert "after swap ok=True" in replacement.getvalue()

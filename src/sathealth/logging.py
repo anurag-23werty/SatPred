@@ -16,6 +16,26 @@ _FIELDS_ATTR = "sathealth_fields"
 _configured = False
 
 
+class _StderrHandler(logging.StreamHandler):  # type: ignore[type-arg]
+    """Writes to whatever ``sys.stderr`` is *now*.
+
+    A plain ``StreamHandler(sys.stderr)`` keeps the stream object it was created with. When
+    the host later swaps stderr (pytest capture, notebooks, services redirecting output) and
+    closes the old one, every log call raises ``ValueError: I/O operation on closed file``.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(sys.stderr)
+
+    @property
+    def stream(self) -> Any:
+        return sys.stderr
+
+    @stream.setter
+    def stream(self, _: Any) -> None:  # set by StreamHandler.__init__; ignored on purpose
+        pass
+
+
 class KeyValueFormatter(logging.Formatter):
     """Render records as ``<time> <LEVEL> <logger> | <message> k=v k=v``."""
 
@@ -69,7 +89,7 @@ def configure_logging(level: str | int = "INFO") -> None:
     root = logging.getLogger("sathealth")
     root.setLevel(level)
     if not _configured:
-        handler = logging.StreamHandler(sys.stderr)
+        handler = _StderrHandler()
         handler.setFormatter(KeyValueFormatter())
         root.addHandler(handler)
         root.propagate = False
