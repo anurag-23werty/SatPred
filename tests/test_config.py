@@ -58,3 +58,15 @@ def test_config_is_immutable() -> None:
 
 def test_to_dict_is_json_safe() -> None:
     assert Config().to_dict()["paths"]["raw_dir"] == "data/raw/telemanom"
+
+
+def test_evaluation_and_baseline_settings() -> None:
+    cfg = load_config(
+        DEFAULT,
+        overrides=["evaluation.threshold=val_sigma", "baselines.iforest.window=16"],
+    )
+    assert cfg.evaluation.threshold == "val_sigma"
+    assert cfg.baselines.iforest.window == 16
+    assert cfg.evaluation.exclude_subsets[1] == ("constant_train", "nominal_out_of_range")
+    with pytest.raises(ValidationError):
+        load_config(None, overrides=["evaluation.quantile=1.5"])

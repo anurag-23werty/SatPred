@@ -6,6 +6,7 @@ log_level: INFO
 paths:
   raw_dir: data/raw/telemanom      # verified raw .npy files + labeled_anomalies.csv
   processed_dir: data/processed    # one sub-directory per config fingerprint
+  runs_dir: runs/evaluations       # one sub-directory per detector + settings fingerprint
 
 dataset:
   name: telemanom                  # NASA SMAP + MSL (Hundman et al., KDD 2018)
@@ -37,3 +38,24 @@ validation:
   out_of_range_warn_fraction: 0.05
   max_anomaly_fraction: 0.3
   low_cardinality_max: 10
+
+evaluation:                        # see docs/adr/0004-evaluation-protocol.md
+  threshold: val_quantile          # val_quantile | val_sigma; fit on nominal validation scores
+  quantile: 0.999                  # alarm rate we accept on held-out nominal data
+  sigma: 4.0                       # used by val_sigma: mean + sigma * std
+  min_threshold_rows: 50           # shorter validation tails fall back to train scores
+  early_tolerance: 0               # steps before a labelled start that count as detection
+  min_event_gap: 0                 # merge predicted runs separated by <= this many steps
+  oracle_thresholds: 200           # candidates for the label-aware upper bound (reported only)
+  bootstrap: 1000                  # resamples over channels for 95% confidence intervals
+  exclude_subsets:                 # also report results without channels flagged by these
+    - [constant_train]
+    - [constant_train, nominal_out_of_range]
+
+baselines:
+  limit:
+    margin: 0.05                   # widen [train min, train max] by 5% of its range
+  iforest:
+    window: 32
+    n_estimators: 200
+    max_samples: 256

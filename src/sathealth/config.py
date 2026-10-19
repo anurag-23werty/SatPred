@@ -37,6 +37,7 @@ class DuplicatePolicy(StrEnum):
 class PathsConfig(_Strict):
     raw_dir: Path = Path("data/raw/telemanom")
     processed_dir: Path = Path("data/processed")
+    runs_dir: Path = Path("runs/evaluations")
 
 
 class DatasetConfig(_Strict):
@@ -88,6 +89,51 @@ class ValidationConfig(_Strict):
     low_cardinality_max: int = Field(default=10, ge=1)
 
 
+class EvaluationConfig(_Strict):
+    """Protocol for scoring detectors; see docs/adr/0004-evaluation-protocol.md.
+
+    Thresholds are derived from validation scores only (the nominal tail of train), never
+    from test labels. ``oracle_thresholds`` is used solely to report an upper bound.
+    """
+
+    threshold: Literal["val_quantile", "val_sigma"] = "val_quantile"
+    quantile: float = Field(default=0.999, gt=0.5, lt=1.0)
+    sigma: float = Field(default=4.0, gt=0.0)
+    min_threshold_rows: int = Field(
+        default=50, ge=1, description="Validation shorter than this falls back to train scores."
+    )
+    early_tolerance: int = Field(
+        default=0, ge=0, description="Steps before a labelled start that still count as a hit."
+    )
+    min_event_gap: int = Field(
+        default=0, ge=0, description="Predicted runs separated by <= this many steps merge."
+    )
+    oracle_thresholds: int = Field(default=200, ge=10)
+    bootstrap: int = Field(default=1000, ge=0, description="Resamples for 95% CIs; 0 disables.")
+    exclude_subsets: tuple[tuple[str, ...], ...] = Field(
+        default=(("constant_train",), ("constant_train", "nominal_out_of_range")),
+        description="Extra result subsets, each excluding channels flagged by these Phase 1 "
+        "quality checks.",
+    )
+
+
+class LimitConfig(_Strict):
+    margin: float = Field(
+        default=0.05, ge=0.0, description="Band widening as a fraction of the train range."
+    )
+
+
+class IsolationForestConfig(_Strict):
+    window: int = Field(default=32, ge=2)
+    n_estimators: int = Field(default=200, ge=10)
+    max_samples: int = Field(default=256, ge=16)
+
+
+class BaselinesConfig(_Strict):
+    limit: LimitConfig = LimitConfig()
+    iforest: IsolationForestConfig = IsolationForestConfig()
+
+
 class Config(_Strict):
     seed: int = 42
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -97,6 +143,8 @@ class Config(_Strict):
     preprocess: PreprocessConfig = PreprocessConfig()
     windows: WindowConfig = WindowConfig()
     validation: ValidationConfig = ValidationConfig()
+    evaluation: EvaluationConfig = EvaluationConfig()
+    baselines: BaselinesConfig = BaselinesConfig()
 
     @model_validator(mode="after")
     def _check_columns(self) -> "Config":
