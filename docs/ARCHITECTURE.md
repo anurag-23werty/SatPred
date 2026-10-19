@@ -1,7 +1,8 @@
 # System architecture
 
 The target system has six layers. **Phase 1 implements L2** (ingest and preprocessing) for
-the NASA SMAP/MSL benchmark. The other layers arrive in the phases listed in
+the NASA SMAP/MSL benchmark. **Phase 2 adds the evaluation harness and the L3 statistical
+baselines.** The other layers arrive in the phases listed in
 [ROADMAP.md](ROADMAP.md).
 
 ```mermaid
@@ -72,4 +73,10 @@ load_prepared() ───────► PreparedChannel.windows()    zero-copy 
 | `sathealth.features.windowing` | Zero-copy windows, window labels, chronological split |
 | `sathealth.pipeline.prepare` | Atomic, idempotent prepare run with a provenance manifest |
 | `sathealth.pipeline.report` | Markdown data card generator |
-| `sathealth.cli` | `sathealth download / verify / prepare / report / info` |
+| `sathealth.evaluation.metrics` | Point, event-wise, composite and point-adjusted metrics; delays; AP; oracle |
+| `sathealth.evaluation.thresholds` | Label-free thresholds from nominal validation scores |
+| `sathealth.evaluation.aggregate` | Micro/macro aggregation, subsets, bootstrap CIs over channels |
+| `sathealth.detectors` | `Detector` interface, limit check, robust z-score, Isolation Forest, random, registry |
+| `sathealth.pipeline.evaluate` | Atomic, fingerprinted evaluation runs with saved scores |
+| `sathealth.pipeline.leaderboard` | `docs/BASELINES.md` generator |
+| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / leaderboard / info` |

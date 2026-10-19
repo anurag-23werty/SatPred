@@ -8,7 +8,8 @@ broken relationships between channels, and they never say *why*. sathealth combi
 ensemble of detectors with an explainability layer, so each alert says which channel, when
 the problem started, which dependency broke and what normal would have looked like.
 
-> **Status: Phase 1 (data foundation) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: Phase 2 (evaluation harness + baselines) complete.** See
+> [docs/ROADMAP.md](docs/ROADMAP.md) and the results in [docs/BASELINES.md](docs/BASELINES.md).
 
 ## Quickstart
 
@@ -18,6 +19,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
 make install     # uv sync + git hooks
 make download    # NASA SMAP/MSL, 165 files / 173 MB, every file SHA-256 verified
 make prepare     # validate → split → scale → data/processed/telemanom-<fingerprint>/
+make leaderboard # evaluate all baselines → docs/BASELINES.md (~20 s)
 make check       # ruff + mypy --strict + unit tests
 make test-data   # integration tests against the real dataset
 ```
@@ -46,7 +48,23 @@ Every command accepts `--config` and `--set key.sub=value`, for example
 | **No leakage** | Chronological split, then the scaler is fit on train rows only, then windows are built per split ([ADR 0003](docs/adr/0003-train-only-robust-scaling.md)) |
 | **Known data quality** | Per-channel ERROR/WARNING/INFO checks, published in [docs/DATA_CARD.md](docs/DATA_CARD.md) |
 | **Reproducibility** | Output directory keyed by a config fingerprint; `manifest.json` records config, git commit, raw digest and scaler parameters |
-| **Engineering quality** | `mypy --strict`, ruff, 95% branch coverage, CI on Python 3.12 and 3.13, plus a real-data CI job |
+| **Honest evaluation** | Thresholds never see labels; composite F1 headline; bootstrap CIs; random-score control ([ADR 0004](docs/adr/0004-evaluation-protocol.md)) |
+| **Engineering quality** | `mypy --strict`, ruff, >90% branch coverage, CI on Python 3.12 and 3.13, plus a real-data CI job |
+
+## Baseline results (Phase 2)
+
+All 80 channels, thresholds fit without labels ([protocol](docs/adr/0004-evaluation-protocol.md)):
+
+| Detector | Composite F1 [95% CI] | Event F1 | Point-adjusted F1 ⚠ |
+|---|---|---:|---:|
+| Limit check (today's practice) | 0.458 [0.30, 0.58] | 0.141 | 0.509 |
+| Robust z-score | 0.395 [0.26, 0.52] | 0.202 | 0.506 |
+| Isolation Forest | 0.372 [0.22, 0.50] | 0.054 | 0.589 |
+| Random scores | 0.210 [0.11, 0.29] | 0.060 | **0.897** |
+
+Random scores beat every real detector on point-adjusted F1, which is why we don't
+headline it. The real baselines' confidence intervals overlap: this is the band Phase 3 has
+to beat. Details are in [docs/BASELINES.md](docs/BASELINES.md).
 
 ## What we found in the data
 
@@ -71,7 +89,9 @@ src/sathealth/
   cli.py           `sathealth` command
   data/            download, manifests, Telemanom loader, schema
   features/        validation, scaling, windowing
-  pipeline/        prepare run, data card
+  evaluation/      metrics, label-free thresholds, aggregation + bootstrap CIs
+  detectors/       limit check, robust z-score, Isolation Forest, random
+  pipeline/        prepare, evaluate, data card, leaderboard
   utils/           hashing, seeding
 tests/             unit tests + integration/ (real data, `-m data`)
 ```
