@@ -9,6 +9,11 @@ means (they are not count-based).
 
 95% confidence intervals come from a percentile bootstrap that resamples *channels* with
 replacement: channels are the independent units, while time steps within a channel are not.
+
+To compare two detectors, :func:`paired_composite_delta` resamples the *same* channels for
+both. Two detectors are scored on identical channels, so their errors are correlated; a
+paired interval for the difference is much tighter than two separate intervals, and "the two
+separate intervals do not overlap" is a needlessly strict test.
 """
 
 from collections.abc import Sequence
@@ -17,6 +22,7 @@ from typing import Any
 
 import numpy as np
 
+from sathealth.data.schema import FloatArray
 from sathealth.evaluation.metrics import ChannelMetrics, EventCounts, PointCounts, f1
 
 
@@ -145,3 +151,71 @@ def summarize_subsets(
         name = "excluding " + "+".join(checks)
         subsets[name] = [r for r in results if not set(r.flags) & set(checks)]
     return {name: summarize(rs, bootstrap=bootstrap, seed=seed) for name, rs in subsets.items()}
+
+
+COMPOSITE_COLUMNS = ("point_tp", "point_fp", "event_tp", "event_fn")
+
+
+def composite_counts(per_channel: Sequence[dict[str, Any]]) -> FloatArray:
+    """``(C, 4)`` counts behind composite F1 from ``per_channel.json`` rows."""
+    return np.array(
+        [
+            (c["points"]["tp"], c["points"]["fp"], c["events"]["tp"], c["events"]["fn"])
+            for c in per_channel
+        ],
+        dtype=np.float64,
+    )
+
+
+def _composite_f1(sums: FloatArray) -> FloatArray:
+    """Composite F1 from summed counts, vectorised over the leading axes."""
+    ptp, pfp, etp, efn = (sums[..., k] for k in range(4))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        precision = np.where(ptp + pfp > 0, ptp / (ptp + pfp), 0.0)
+        recall = np.where(etp + efn > 0, etp / (etp + efn), 0.0)
+        result: FloatArray = np.where(
+            precision + recall > 0, 2 * precision * recall / (precision + recall), 0.0
+        )
+    return result
+
+
+def _paired(point: float, boot: FloatArray | None) -> dict[str, Any]:
+    if boot is None:
+        return {"delta": point, "ci95": None, "p_not_better": None}
+    lo, hi = np.percentile(boot, [2.5, 97.5])
+    return {
+        "delta": point,
+        "ci95": (float(lo), float(hi)),
+        "p_not_better": float(np.mean(boot <= 0)),
+    }
+
+
+def paired_mean_delta(
+    a: FloatArray, b: FloatArray, *, bootstrap: int = 1000, seed: int = 0
+) -> dict[str, Any]:
+    """Mean of a per-channel metric (e.g. AUC-PR) for A minus B, paired over channels."""
+    if a.shape != b.shape:
+        raise ValueError(f"channel counts differ: {a.shape} vs {b.shape}")
+    diff = a - b
+    if bootstrap == 0 or a.shape[0] < 2:
+        return _paired(float(diff.mean()), None)
+    idx = np.random.default_rng(seed).integers(0, a.shape[0], size=(bootstrap, a.shape[0]))
+    return _paired(float(diff.mean()), diff[idx].mean(axis=1))
+
+
+def paired_composite_delta(
+    a: FloatArray, b: FloatArray, *, bootstrap: int = 1000, seed: int = 0
+) -> dict[str, Any]:
+    """Composite F1 of A minus B, with a 95% CI from resampling the same channels for both.
+
+    ``a`` and ``b`` are :func:`composite_counts` arrays over identical channels in identical
+    order. ``p_not_better`` is the bootstrap fraction where A does not beat B.
+    """
+    if a.shape != b.shape:
+        raise ValueError(f"channel counts differ: {a.shape} vs {b.shape}")
+    delta = float(_composite_f1(a.sum(axis=0)) - _composite_f1(b.sum(axis=0)))
+    if bootstrap == 0 or a.shape[0] < 2:
+        return _paired(delta, None)
+    idx = np.random.default_rng(seed).integers(0, a.shape[0], size=(bootstrap, a.shape[0]))
+    boot = _composite_f1(a[idx].sum(axis=1)) - _composite_f1(b[idx].sum(axis=1))
+    return _paired(delta, boot)
