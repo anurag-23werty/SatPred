@@ -70,3 +70,22 @@ def test_schema_version_is_checked(tmp_path: Path) -> None:
     db.close()
     with pytest.raises(RuntimeError, match="schema version 99"):
         Store(path)
+
+
+def test_version_1_database_is_migrated(tmp_path: Path) -> None:
+    from sathealth.service.store import SCHEMA
+
+    path = tmp_path / "v1.db"
+    db = sqlite3.connect(path)
+    db.executescript(SCHEMA)
+    db.execute("INSERT INTO meta VALUES ('schema_version', '1')")
+    db.execute("INSERT INTO replays (started_at, decision, channels) VALUES ('t', 'fused', '[]')")
+    db.commit()
+    db.close()
+    store = Store(path)  # upgrades in place, keeps data
+    assert store.rebaselines() == []
+    audit = store.add_rebaseline(1, "A-1", 120, 500, "op", "new mode")
+    assert store.rebaselines("A-1")[0]["id"] == audit
+    store.close()
+    row = sqlite3.connect(path).execute("SELECT value FROM meta").fetchone()
+    assert row == ("2",)

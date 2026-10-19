@@ -11,7 +11,9 @@ implements the same rule incrementally:
 * event merging: an event stays open through gaps of up to ``merge_gap`` steps and closes
   once a longer gap is certain (``merge_gap + 1`` quiet steps after the last alarm);
 * final events built by the same :func:`~sathealth.decision.events.build_events` as the
-  batch path, so they are identical field by field (pinned by a parity test).
+  batch path, so they are identical field by field (pinned by a parity test);
+* :meth:`StreamingDecider.rebaseline`: after an operator confirms a permanent shift, the
+  calibration anchor becomes the channel's recent scores ("this is the new normal").
 
 Telemanom's dynamic threshold and pruning look at a whole window of future scores and are
 therefore not supported here.
@@ -59,6 +61,8 @@ class StreamingDecider:
     _per_input: dict[str, list[float]] = field(default_factory=dict)
     _oor: list[bool] = field(default_factory=list)
     _open: _OpenEvent | None = None
+    _anchor: dict[str, FloatArray] = field(default_factory=dict)
+    _raw: dict[str, list[float]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         d = self.config
@@ -67,17 +71,17 @@ class StreamingDecider:
         if set(self.validation) != set(d.inputs):
             raise ValueError(f"validation scores for {sorted(self.validation)}, need {d.inputs}")
         for name in d.inputs:
+            self._anchor[name] = np.asarray(self.validation[name], dtype=np.float64)
             self._recent[name] = np.zeros(0)
             self._accepted[name] = []
             self._per_input[name] = []
+            self._raw[name] = []
         self._refit()
 
     def _refit(self) -> None:
         d = self.config
         for name in d.inputs:
-            reference = np.r_[
-                np.asarray(self.validation[name], dtype=np.float64), self._recent[name]
-            ]
+            reference = np.r_[self._anchor[name], self._recent[name]]
             self._cal[name] = TailCalibrator(d.calibration, d.tail_quantile, d.max_surprise).fit(
                 reference
             )
@@ -132,6 +136,7 @@ class StreamingDecider:
         self._fused.append(fused)
         for name in d.inputs:
             self._per_input[name].append(surprises[name])
+            self._raw[name].append(float(scores[name]))
         self._oor.append(bool(out_of_range))
 
         opened = closed = None
@@ -156,6 +161,23 @@ class StreamingDecider:
         if current.last_alarm - current.start + 1 < self.config.min_duration:
             return None
         return self._event(current.start, current.last_alarm)
+
+    def rebaseline(self, steps: int) -> Event | None:
+        """Accept the last ``steps`` scores, alarms included, as the new nominal reference.
+
+        Used after an operator confirms a permanent shift (e.g. a new operating mode). Any
+        open event is closed as of its last alarm step and returned; the alarm state is
+        cleared. Raises ``ValueError`` with fewer than 50 steps of history.
+        """
+        if len(self._fused) < 50 or steps < 50:
+            raise ValueError("re-baselining needs at least 50 steps of history")
+        for name in self.config.inputs:
+            self._anchor[name] = np.asarray(self._raw[name][-steps:], dtype=np.float64)
+            self._recent[name] = np.zeros(0)
+            self._accepted[name] = []
+        self._refit()
+        self._active = False
+        return self._close()
 
     def finish(self) -> Event | None:
         """End of stream: close the event that is still open, if any."""

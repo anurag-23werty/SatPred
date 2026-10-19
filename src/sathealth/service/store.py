@@ -16,7 +16,7 @@ from typing import Any
 
 from sathealth.decision.events import Event
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 VERDICTS = ("confirmed", "false_alarm", "unsure")
 
 SCHEMA = """
@@ -62,6 +62,23 @@ CREATE TABLE IF NOT EXISTS verdicts (
 CREATE INDEX IF NOT EXISTS verdicts_by_event ON verdicts (event_id);
 """
 
+# Forward migrations: MIGRATIONS[v] upgrades a version-v database to v + 1.
+MIGRATIONS = {
+    1: """
+CREATE TABLE IF NOT EXISTS rebaselines (
+    id INTEGER PRIMARY KEY,
+    replay_id INTEGER NOT NULL REFERENCES replays(id),
+    chan_id TEXT NOT NULL,
+    step INTEGER NOT NULL,
+    steps INTEGER NOT NULL,
+    operator TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    closed_event_id INTEGER REFERENCES events(id),
+    created_at TEXT NOT NULL
+);
+""",
+}
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
@@ -78,14 +95,22 @@ class Store:
         self._db.execute("PRAGMA foreign_keys=ON")
         with self._lock:
             self._db.executescript(SCHEMA)  # idempotent DDL; executescript commits itself
-        with self._tx() as db:
-            row = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
-            if row is None:
-                db.execute("INSERT INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
-            elif int(row["value"]) != SCHEMA_VERSION:
+            row = self._db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+            version = SCHEMA_VERSION if row is None else int(row["value"])
+            if version > SCHEMA_VERSION:
                 raise RuntimeError(
-                    f"{path}: schema version {row['value']}, this code expects {SCHEMA_VERSION}"
+                    f"{path}: schema version {version} is newer than this code "
+                    f"({SCHEMA_VERSION}); upgrade sathealth"
                 )
+            if row is None:  # a new database gets every table at once
+                for script in MIGRATIONS.values():
+                    self._db.executescript(script)
+            for v in range(version, SCHEMA_VERSION):
+                self._db.executescript(MIGRATIONS[v])
+        with self._tx() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),)
+            )
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -217,6 +242,31 @@ class Store:
                 "INSERT OR REPLACE INTO explanations VALUES (?, ?, ?)",
                 (event_id, json.dumps(body), _now()),
             )
+
+    # --- re-baselining -------------------------------------------------------------------
+
+    def add_rebaseline(
+        self,
+        replay_id: int,
+        chan_id: str,
+        step: int,
+        steps: int,
+        operator: str,
+        note: str = "",
+        closed_event_id: int | None = None,
+    ) -> int:
+        with self._tx() as db:
+            cur = db.execute(
+                "INSERT INTO rebaselines (replay_id, chan_id, step, steps, operator, note, "
+                "closed_event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (replay_id, chan_id, step, steps, operator, note, closed_event_id, _now()),
+            )
+            return int(cur.lastrowid or 0)
+
+    def rebaselines(self, chan_id: str | None = None) -> list[dict[str, Any]]:
+        if chan_id is None:
+            return self._query("SELECT * FROM rebaselines ORDER BY id")
+        return self._query("SELECT * FROM rebaselines WHERE chan_id=? ORDER BY id", (chan_id,))
 
     # --- verdicts ------------------------------------------------------------------------
 

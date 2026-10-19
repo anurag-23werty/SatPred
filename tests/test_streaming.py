@@ -102,3 +102,21 @@ def test_streaming_rejects_batch_only_rules() -> None:
         _decider(threshold="ndt")
     with pytest.raises(ValueError, match="validation scores"):
         StreamingDecider(DecisionConfig(inputs=("a", "b")), {"a": np.zeros(5)})
+
+
+def test_rebaseline_ends_an_alarm_on_a_permanent_shift() -> None:
+    d = DecisionConfig(inputs=("a",), recalibrate_every=50, recalibrate_window=200, merge_gap=0)
+    rng = np.random.default_rng(0)
+    decider = StreamingDecider(d, {"a": rng.normal(size=500)})
+    for v in rng.normal(size=100):
+        decider.step({"a": float(v)})
+    shifted = rng.normal(loc=8.0, size=300)
+    results = [decider.step({"a": float(v)}) for v in shifted[:150]]
+    assert results[-1].alarm, "a permanent level shift stays in alarm (ADR 0006)"
+    closed = decider.rebaseline(100)
+    assert closed is not None
+    assert closed.start == 100
+    after = [decider.step({"a": float(v)}) for v in shifted[150:]]
+    assert sum(r.alarm for r in after) <= 3, "the new level is the new normal"
+    with pytest.raises(ValueError, match="50 steps"):
+        StreamingDecider(d, {"a": np.zeros(10)}).rebaseline(100)
