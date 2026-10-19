@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from sathealth.config import Config, load_config
 from sathealth.data.download import FileSpec, Manifest
 from sathealth.utils.hashing import sha256_file
 
@@ -55,3 +56,43 @@ def raw_manifest(raw_root: Path) -> Manifest:
         if p.is_file()
     )
     return Manifest(name="synthetic", base_url="https://mirror.test", files=files)
+
+
+EXPLAIN_FAST = [
+    "deep.training.epochs=3",
+    "deep.lstm.window=16",
+    "deep.lstm.hidden=8",
+    "decision.inputs=[lstm]",
+    "explain.horizon=20",
+    "explain.band_starts=5",
+    "explain.ig_steps=8",
+    "explain.eval_injections=3",
+    "explain.eval_coverage_horizon=10",
+    "explain.eval_channels_per_spacecraft=1",
+    "evaluation.bootstrap=20",
+]
+
+
+@pytest.fixture
+def explain_config(raw_root: Path, raw_manifest: Manifest, tmp_path: Path) -> Config:
+    """Synthetic dataset with a tiny LSTM evaluated and a decision run on its scores."""
+    from sathealth.pipeline.decide import decide
+    from sathealth.pipeline.evaluate import evaluate_detector
+    from sathealth.pipeline.prepare import prepare_dataset
+
+    cfg = load_config(
+        None,
+        overrides=[
+            f"paths.raw_dir={raw_root}",
+            f"paths.processed_dir={tmp_path / 'processed'}",
+            f"paths.runs_dir={tmp_path / 'runs'}",
+            f"paths.decisions_dir={tmp_path / 'decisions'}",
+            f"paths.models_dir={tmp_path / 'models'}",
+            f"paths.explanations_dir={tmp_path / 'explanations'}",
+            *EXPLAIN_FAST,
+        ],
+    )
+    prepare_dataset(cfg, manifest=raw_manifest)
+    evaluate_detector(cfg, "lstm")
+    decide(cfg)
+    return cfg
