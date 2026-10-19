@@ -127,16 +127,16 @@ def attribute_peak(
 
 def explain_event(
     config: Config,
-    det: LSTMDetector,
-    band: HorizonBand,
+    det: LSTMDetector | None,
+    band: HorizonBand | None,
     channel: PreparedChannel,
     event: dict[str, Any],
     surprise: FloatArray,
     *,
     llm_client: Any = None,
 ) -> tuple[dict[str, Any], dict[str, FloatArray]]:
+    """Onset and narrative always; counterfactual and attribution need the LSTM (``det``)."""
     e = config.explain
-    cols = list(det.value_columns)
     onset = estimate_onset(
         surprise, event["start"], level=e.onset_level, max_lookback=e.onset_lookback
     )
@@ -150,7 +150,8 @@ def explain_event(
     arrays: dict[str, FloatArray] = {}
 
     horizon = min(e.horizon, channel.test.shape[0] - onset)
-    if onset > 0 and horizon > 0:
+    if det is not None and band is not None and onset > 0 and horizon > 0:
+        cols = list(det.value_columns)
         history = channel.test[max(0, onset - det.window) : onset]
         future = channel.test[onset : onset + horizon]
         expected = rollout(det.model, history[None], future[None], det.value_columns, det.window)
@@ -180,7 +181,8 @@ def explain_event(
         }
         arrays |= units
 
-    if event["peak_step"] > 0:
+    if det is not None and event["peak_step"] > 0:
+        cols = list(det.value_columns)
         attr = attribute_peak(config, det, channel, event["peak_step"])
         importance = attr.feature_importance()
         total = float(importance.sum()) or 1.0
