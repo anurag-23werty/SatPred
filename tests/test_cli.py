@@ -101,3 +101,28 @@ def test_detector_groups_expand_without_repeats() -> None:
     assert _detectors(args.detectors) == ["lstm", "transformer", "limit"]
     assert args.jobs == 3
     assert _detectors(["baselines"]) == ["limit", "zscore", "iforest", "random"]
+
+
+def test_decide_ablation_and_leaderboard_with_decision(
+    raw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = [
+        *_args(raw_root, tmp_path),
+        "--set",
+        f"paths.runs_dir={tmp_path / 'runs'}",
+        "--set",
+        f"paths.decisions_dir={tmp_path / 'decisions'}",
+        "--set",
+        "evaluation.bootstrap=10",
+        "--set",
+        "decision.inputs=[zscore]",
+    ]
+    assert main(["prepare", "--skip-verify", *args]) == 0
+    assert main(["decide", *args]) == 1, "no saved scores yet"
+    assert main(["evaluate", "baselines", *args]) == 0
+    assert main(["decide", *args]) == 0
+    assert "within_budget=" in capsys.readouterr().out
+    board = tmp_path / "board.md"
+    assert main(["leaderboard", "baselines", "--with-decision", "--out", str(board), *args]) == 0
+    assert "| fused |" in board.read_text()
+    assert main(["ablation", "--out", str(tmp_path / "d.md"), *args]) == 1, "needs deep runs"

@@ -5,6 +5,8 @@
     sathealth prepare    validate, split, scale and store the dataset
     sathealth report     write the Markdown data card
     sathealth evaluate   score detectors under the fixed evaluation protocol
+    sathealth decide     run the decision layer (calibrate, fuse, alarm, events) on saved scores
+    sathealth ablation   run every decision-layer variant and write docs/DECISION.md
     sathealth leaderboard  write the Markdown results table
     sathealth info       print the resolved config and where outputs go
 
@@ -25,6 +27,8 @@ from sathealth.data.telemanom import TelemanomDataset
 from sathealth.detectors.registry import BASELINE_NAMES, DETECTOR_NAMES
 from sathealth.features.validation import validate_dataset
 from sathealth.logging import configure_logging, get_logger
+from sathealth.pipeline.ablation import write_ablation
+from sathealth.pipeline.decide import decide
 from sathealth.pipeline.evaluate import evaluate_detector
 from sathealth.pipeline.leaderboard import write_leaderboard
 from sathealth.pipeline.prepare import (
@@ -117,9 +121,36 @@ def _cmd_evaluate(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_leaderboard(cfg: Config, args: argparse.Namespace) -> int:
+def _cmd_decide(cfg: Config, args: argparse.Namespace) -> int:
     try:
-        out = write_leaderboard(cfg, _detectors(args.detectors), args.out)
+        result = decide(cfg, force=args.force)
+    except FileNotFoundError as exc:
+        log.error("decide failed", reason=str(exc))
+        return 1
+    overall = result.summary["subsets"]["all"]
+    print(
+        f"{result.name} composite_f1={overall['composite_f1']:.3f} "
+        f"event_f1={overall['event']['f1']:.3f} "
+        f"fp_events_per_1k={overall['fp_events_per_1k_steps']:.2f} "
+        f"within_budget={result.summary['within_budget']} {result.run_dir}"
+    )
+    return 0
+
+
+def _cmd_ablation(cfg: Config, args: argparse.Namespace) -> int:
+    try:
+        out = write_ablation(cfg, args.out, force=args.force)
+    except FileNotFoundError as exc:
+        log.error("ablation failed", reason=str(exc))
+        return 1
+    log.info("wrote ablation report", path=out)
+    return 0
+
+
+def _cmd_leaderboard(cfg: Config, args: argparse.Namespace) -> int:
+    names = _detectors(args.detectors) + ([cfg.decision.name] if args.with_decision else [])
+    try:
+        out = write_leaderboard(cfg, names, args.out)
     except FileNotFoundError as exc:
         log.error("leaderboard failed", reason=str(exc))
         return 1
@@ -182,6 +213,14 @@ def build_parser() -> argparse.ArgumentParser:
     lb = sub.add_parser("leaderboard", parents=[common], help="write the results table")
     lb.add_argument("detectors", nargs="*", choices=choices, default="all")
     lb.add_argument("--out", type=Path, default=Path("docs/BASELINES.md"))
+    lb.add_argument(
+        "--with-decision", action="store_true", help="also list the configured decision pipeline"
+    )
+    dec = sub.add_parser("decide", parents=[common], help="run the decision layer")
+    dec.add_argument("--force", action="store_true", help="re-run even if results exist")
+    abl = sub.add_parser("ablation", parents=[common], help="run all decision variants")
+    abl.add_argument("--out", type=Path, default=Path("docs/DECISION.md"))
+    abl.add_argument("--force", action="store_true", help="re-run even if results exist")
     sub.add_parser("info", parents=[common], help="print resolved config and run directory")
     return parser
 
@@ -192,6 +231,8 @@ _COMMANDS = {
     "prepare": _cmd_prepare,
     "report": _cmd_report,
     "evaluate": _cmd_evaluate,
+    "decide": _cmd_decide,
+    "ablation": _cmd_ablation,
     "leaderboard": _cmd_leaderboard,
     "info": _cmd_info,
 }

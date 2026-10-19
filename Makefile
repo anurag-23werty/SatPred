@@ -2,7 +2,7 @@
 CONFIG ?= configs/default.yaml
 JOBS ?= 4
 
-.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate evaluate-baselines leaderboard requirements banner clean
+.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate evaluate-baselines decide ablation leaderboard requirements banner clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-19s\033[0m %s\n", $$1, $$2}'
@@ -51,8 +51,14 @@ evaluate:  ## Evaluate every detector, JOBS channels in parallel (deep models: ~
 evaluate-baselines:  ## Evaluate only the classical baselines (~20 s)
 	uv run sathealth evaluate baselines --config $(CONFIG)
 
-leaderboard: evaluate  ## Regenerate docs/BASELINES.md
-	uv run sathealth leaderboard --config $(CONFIG) --out docs/BASELINES.md
+decide: evaluate  ## Run the decision layer on saved scores (seconds)
+	uv run sathealth decide --config $(CONFIG)
+
+ablation: evaluate  ## Run every decision variant → docs/DECISION.md (seconds)
+	uv run sathealth ablation --config $(CONFIG) --out docs/DECISION.md
+
+leaderboard: evaluate decide  ## Regenerate docs/BASELINES.md
+	uv run sathealth leaderboard --with-decision --config $(CONFIG) --out docs/BASELINES.md
 
 banner:  ## Regenerate the README banner (docs/assets/banner.svg)
 	uv run python scripts/build_banner.py
