@@ -75,7 +75,7 @@ def evaluation_dir_for(config: Config, detector: str) -> Path:
     return config.paths.runs_dir / f"{detector}-{evaluation_fingerprint(config, detector)}"
 
 
-def _channel_flags(channel_meta: dict[str, Any]) -> tuple[str, ...]:
+def channel_flags(channel_meta: dict[str, Any]) -> tuple[str, ...]:
     return tuple(
         sorted({i["check"] for i in channel_meta.get("issues", []) if i["severity"] != "info"})
     )
@@ -136,7 +136,7 @@ def _evaluate_channel(
         oracle,
         threshold.value,
         threshold.source,
-        _channel_flags(meta),
+        channel_flags(meta),
     )
     return _ChannelOutcome(result, val_scores, test_scores, seconds, model.diagnostics())
 
