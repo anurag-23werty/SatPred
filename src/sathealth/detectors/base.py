@@ -35,6 +35,10 @@ class Detector(ABC):
         """Settings that change the scores; part of the evaluation run fingerprint."""
         return {"value_columns": list(self.value_columns)}
 
+    def diagnostics(self) -> dict[str, Any]:
+        """Per-channel fit details (e.g. training curves) stored next to the results."""
+        return {}
+
     def _values(self, x: FloatArray) -> FloatArray:
         if x.ndim != 2:
             raise ValueError(f"expected (T, D) array, got shape {x.shape}")
