@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+.env
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Data and generated artifacts (reproducible from `sathealth download` / `sathealth prepare`).
+# Anchored with a leading slash so they never match packages such as src/sathealth/data/.
+/data/
+/artifacts/
+/runs/
+*.part
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
