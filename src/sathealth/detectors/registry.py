@@ -6,7 +6,9 @@ from sathealth.config import Config
 from sathealth.detectors.base import Detector
 from sathealth.detectors.iforest import IsolationForestDetector
 from sathealth.detectors.limit import LimitCheck
+from sathealth.detectors.lstm import LSTMDetector
 from sathealth.detectors.reference import RandomScore
+from sathealth.detectors.transformer import TransformerDetector
 from sathealth.detectors.zscore import RobustZScore
 
 _BUILDERS: dict[str, Callable[[Config], Detector]] = {
@@ -20,7 +22,15 @@ _BUILDERS: dict[str, Callable[[Config], Detector]] = {
         seed=c.seed,
     ),
     "random": lambda c: RandomScore(c.preprocess.value_columns, seed=c.seed),
+    "lstm": lambda c: LSTMDetector(
+        c.preprocess.value_columns, c.deep.lstm, c.deep.training, seed=c.seed
+    ),
+    "transformer": lambda c: TransformerDetector(
+        c.preprocess.value_columns, c.deep.transformer, c.deep.training, seed=c.seed
+    ),
 }
+
+BASELINE_NAMES: tuple[str, ...] = ("limit", "zscore", "iforest", "random")
 
 DETECTOR_NAMES: tuple[str, ...] = tuple(_BUILDERS)
 

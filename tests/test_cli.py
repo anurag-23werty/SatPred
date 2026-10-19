@@ -83,5 +83,21 @@ def test_detector_selection_defaults_to_all() -> None:
     from sathealth.cli import _detectors, build_parser
 
     args = build_parser().parse_args(["evaluate"])
-    assert _detectors(args.detectors) == ["limit", "zscore", "iforest", "random"]
+    assert _detectors(args.detectors) == [
+        "limit",
+        "zscore",
+        "iforest",
+        "random",
+        "lstm",
+        "transformer",
+    ]
     assert _detectors(build_parser().parse_args(["evaluate", "limit"]).detectors) == ["limit"]
+
+
+def test_detector_groups_expand_without_repeats() -> None:
+    from sathealth.cli import _detectors, build_parser
+
+    args = build_parser().parse_args(["evaluate", "deep", "lstm", "limit", "--jobs", "3"])
+    assert _detectors(args.detectors) == ["lstm", "transformer", "limit"]
+    assert args.jobs == 3
+    assert _detectors(["baselines"]) == ["limit", "zscore", "iforest", "random"]

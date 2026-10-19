@@ -6,8 +6,8 @@ import pytest
 
 from sathealth.config import Config, load_config
 from sathealth.data.download import Manifest
-from sathealth.detectors.registry import DETECTOR_NAMES, build_detector
-from sathealth.pipeline.evaluate import evaluate_detector, evaluation_dir_for
+from sathealth.detectors.registry import BASELINE_NAMES, DETECTOR_NAMES, build_detector
+from sathealth.pipeline.evaluate import TRAINING_FILE, evaluate_detector, evaluation_dir_for
 from sathealth.pipeline.prepare import prepare_dataset
 
 
@@ -22,6 +22,13 @@ def config(raw_root: Path, raw_manifest: Manifest, tmp_path: Path) -> Config:
             "evaluation.bootstrap=50",
             "baselines.iforest.window=16",
             "baselines.iforest.n_estimators=50",
+            "deep.training.epochs=2",
+            "deep.lstm.window=16",
+            "deep.lstm.hidden=8",
+            "deep.transformer.window=16",
+            "deep.transformer.d_model=8",
+            "deep.transformer.heads=2",
+            "deep.transformer.layers=1",
         ],
     )
     prepare_dataset(cfg, manifest=raw_manifest)
@@ -29,14 +36,15 @@ def config(raw_root: Path, raw_manifest: Manifest, tmp_path: Path) -> Config:
 
 
 def test_registry_builds_every_detector() -> None:
-    assert set(DETECTOR_NAMES) == {"limit", "zscore", "iforest", "random"}
+    assert set(DETECTOR_NAMES) == {"limit", "zscore", "iforest", "random", "lstm", "transformer"}
+    assert set(BASELINE_NAMES) < set(DETECTOR_NAMES)
     for name in DETECTOR_NAMES:
         assert build_detector(name, Config()).name == name
     with pytest.raises(KeyError, match="unknown detector"):
         build_detector("magic", Config())
 
 
-@pytest.mark.parametrize("detector", ["limit", "zscore", "iforest", "random"])
+@pytest.mark.parametrize("detector", DETECTOR_NAMES)
 def test_evaluation_run_outputs(config: Config, detector: str) -> None:
     result = evaluate_detector(config, detector)
     assert not result.reused
@@ -85,3 +93,58 @@ def test_missing_prepared_data(tmp_path: Path) -> None:
     )
     with pytest.raises(FileNotFoundError, match="sathealth prepare"):
         evaluate_detector(cfg, "limit")
+
+
+@pytest.mark.parametrize("detector", ["lstm", "transformer"])
+def test_deep_runs_store_training_curves(config: Config, detector: str) -> None:
+    result = evaluate_detector(config, detector)
+    training = json.loads((result.run_dir / TRAINING_FILE).read_text())
+    assert set(training) == {"A-1", "C-1", "M-1"}
+    assert training["A-1"]["best_epoch"] in {1, 2}
+    assert len(training["A-1"]["train_loss"]) <= 2
+    assert result.summary["params"]["training"]["epochs"] == 2
+    assert not (evaluate_detector(config, "limit").run_dir / TRAINING_FILE).exists()
+
+
+def _test_scores(run_dir: Path) -> dict[str, np.ndarray]:
+    scores = {}
+    for path in sorted((run_dir / "scores").glob("*.npz")):
+        with np.load(path) as npz:
+            scores[path.stem] = npz["test"]
+    return scores
+
+
+def test_parallel_jobs_give_identical_results(config: Config) -> None:
+    serial = evaluate_detector(config, "lstm")
+    serial_scores = _test_scores(serial.run_dir)
+    parallel = evaluate_detector(config, "lstm", force=True, jobs=2)
+    assert parallel.summary["jobs"] == 2
+    assert parallel.run_dir == serial.run_dir
+    parallel_scores = _test_scores(parallel.run_dir)
+    assert set(parallel_scores) == {"A-1", "C-1", "M-1"}
+    for chan, scores in serial_scores.items():
+        np.testing.assert_array_equal(scores, parallel_scores[chan])
+    assert parallel.summary["subsets"] == serial.summary["subsets"]
+
+
+def test_jobs_must_be_positive(config: Config) -> None:
+    with pytest.raises(ValueError, match="jobs"):
+        evaluate_detector(config, "limit", force=True, jobs=0)
+
+
+def test_finished_runs_are_sent_to_mlflow_when_configured(
+    config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+    monkeypatch.setattr(
+        "sathealth.pipeline.evaluate.log_to_mlflow", lambda *args: calls.append(args) or "r1"
+    )
+    evaluate_detector(config, "zscore")
+    assert calls == [], "tracking is off by default"
+    tracked = config.model_copy(
+        update={"tracking": config.tracking.model_copy(update={"mlflow_uri": "file:./m"})}
+    )
+    result = evaluate_detector(tracked, "zscore", force=True)
+    (summary, run_dir, uri, experiment) = calls[0]
+    assert (run_dir, uri, experiment) == (result.run_dir, "file:./m", "sathealth")
+    assert summary["detector"] == "zscore"

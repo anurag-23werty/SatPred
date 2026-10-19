@@ -22,7 +22,7 @@ from sathealth import __version__
 from sathealth.config import Config, load_config
 from sathealth.data.download import download_dataset, load_manifest, verify_dataset
 from sathealth.data.telemanom import TelemanomDataset
-from sathealth.detectors.registry import DETECTOR_NAMES
+from sathealth.detectors.registry import BASELINE_NAMES, DETECTOR_NAMES
 from sathealth.features.validation import validate_dataset
 from sathealth.logging import configure_logging, get_logger
 from sathealth.pipeline.evaluate import evaluate_detector
@@ -87,16 +87,25 @@ def _cmd_report(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+_GROUPS = {
+    "all": DETECTOR_NAMES,
+    "baselines": BASELINE_NAMES,
+    "deep": tuple(n for n in DETECTOR_NAMES if n not in BASELINE_NAMES),
+}
+
+
 def _detectors(names: str | list[str]) -> list[str]:
+    """Expand group names (all, baselines, deep), keeping order and dropping repeats."""
     # argparse yields the bare default string "all" when no detector is given
     selected = [names] if isinstance(names, str) else names
-    return list(DETECTOR_NAMES) if "all" in selected else selected
+    expanded = [d for name in selected for d in _GROUPS.get(name, (name,))]
+    return list(dict.fromkeys(expanded))
 
 
 def _cmd_evaluate(cfg: Config, args: argparse.Namespace) -> int:
     try:
         for name in _detectors(args.detectors):
-            result = evaluate_detector(cfg, name, force=args.force)
+            result = evaluate_detector(cfg, name, force=args.force, jobs=args.jobs)
             overall = result.summary["subsets"]["all"]
             print(
                 f"{name:8s} composite_f1={overall['composite_f1']:.3f} "
@@ -157,17 +166,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rep = sub.add_parser("report", parents=[common], help="write the Markdown data card")
     rep.add_argument("--out", type=Path, default=None, help="output path (default: stdout)")
+    choices = [*DETECTOR_NAMES, *_GROUPS]
     ev = sub.add_parser("evaluate", parents=[common], help="evaluate detectors")
     ev.add_argument(
         "detectors",
         nargs="*",
-        choices=[*DETECTOR_NAMES, "all"],
+        choices=choices,
         default="all",  # a list default trips argparse's choices check for nargs="*"
-        help="detectors to run (default: all)",
+        help="detectors or groups (all, baselines, deep) to run (default: all)",
     )
     ev.add_argument("--force", action="store_true", help="re-run even if results exist")
+    ev.add_argument(
+        "--jobs", type=int, default=1, help="channels evaluated in parallel (results unchanged)"
+    )
     lb = sub.add_parser("leaderboard", parents=[common], help="write the results table")
-    lb.add_argument("detectors", nargs="*", choices=[*DETECTOR_NAMES, "all"], default="all")
+    lb.add_argument("detectors", nargs="*", choices=choices, default="all")
     lb.add_argument("--out", type=Path, default=Path("docs/BASELINES.md"))
     sub.add_parser("info", parents=[common], help="print resolved config and run directory")
     return parser
