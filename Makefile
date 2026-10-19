@@ -2,7 +2,7 @@
 CONFIG ?= configs/default.yaml
 JOBS ?= 4
 
-.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate evaluate-baselines decide ablation explain leaderboard requirements banner clean
+.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate evaluate-baselines decide ablation explain serve demo leaderboard requirements banner clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-19s\033[0m %s\n", $$1, $$2}'
@@ -60,6 +60,12 @@ ablation: evaluate  ## Run every decision variant → docs/DECISION.md (seconds)
 explain:  ## Explain live alarm events and write docs/EXPLAINABILITY.md (needs evaluate)
 	uv run sathealth decide --config configs/live.yaml
 	uv run sathealth explain-report --config configs/live.yaml --jobs $(JOBS)
+
+serve:  ## Run the operations service + console on http://127.0.0.1:8000 (live profile)
+	uv run sathealth serve --config configs/live.yaml
+
+demo:  ## Headless demo: replay → explained alert → operator verdict stored
+	uv run sathealth demo --config configs/live.yaml
 
 leaderboard: evaluate decide  ## Regenerate docs/BASELINES.md
 	uv run sathealth leaderboard --with-decision --config $(CONFIG) --out docs/BASELINES.md

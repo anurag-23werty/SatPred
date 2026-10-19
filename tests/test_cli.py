@@ -156,3 +156,30 @@ def test_explain_commands(raw_root: Path, tmp_path: Path) -> None:
     assert main(["explain", "--channel", "A-1", *args]) == 0
     assert main(["explain-report", "--out", str(tmp_path / "e.md"), *args]) == 0
     assert "## Hypotheses" in (tmp_path / "e.md").read_text()
+
+
+def test_demo_and_serve_commands(
+    raw_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    args = [
+        *_args(raw_root, tmp_path),
+        "--set",
+        f"paths.runs_dir={tmp_path / 'runs'}",
+        "--set",
+        "decision.inputs=[zscore]",
+        "--set",
+        f"service.db_path={tmp_path / 's.db'}",
+    ]
+    assert main(["prepare", "--skip-verify", *args]) == 0
+    assert main(["demo", "--db", str(tmp_path / "d.db"), *args]) == 1, "no saved scores yet"
+    assert main(["evaluate", "zscore", *args]) == 0
+    assert main(["demo", "--db", str(tmp_path / "d.db"), *args]) == 0
+    out = capsys.readouterr().out
+    assert "4. Verdict" in out
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("uvicorn.run", lambda app, **kw: calls.append(kw))
+    assert main(["serve", "--port", "8123", *args]) == 0
+    assert calls == [{"host": "127.0.0.1", "port": 8123, "log_level": "warning"}]

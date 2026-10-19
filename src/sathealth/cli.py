@@ -9,6 +9,8 @@
     sathealth ablation   run every decision-layer variant and write docs/DECISION.md
     sathealth explain    explain every alarm event: onset, counterfactual, attribution, narrative
     sathealth explain-report  evaluate explanations and write docs/EXPLAINABILITY.md
+    sathealth serve      run the operations service and operator console (http://127.0.0.1:8000)
+    sathealth demo       headless demo: replay → explained alert → operator verdict stored
     sathealth leaderboard  write the Markdown results table
     sathealth info       print the resolved config and where outputs go
 
@@ -171,6 +173,49 @@ def _cmd_explain_report(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from sathealth.service.app import create_app
+
+    service = cfg.service.model_copy(
+        update={k: v for k, v in (("host", args.host), ("port", args.port)) if v is not None}
+    )
+    cfg = cfg.model_copy(update={"service": service})
+    log.info("serving", url=f"http://{service.host}:{service.port}", docs="/docs")
+    uvicorn.run(create_app(cfg), host=service.host, port=service.port, log_level="warning")
+    return 0
+
+
+def _cmd_demo(cfg: Config, args: argparse.Namespace) -> int:
+    from sathealth.service.demo import run_demo
+
+    try:
+        result = run_demo(cfg, db_path=args.db, channels=args.channel or None)
+    except (FileNotFoundError, RuntimeError) as exc:
+        log.error("demo failed", reason=str(exc))
+        return 1
+    alert = result.first_alert
+    print(
+        f"1. Replayed {result.channels} channels for {result.steps} steps in "
+        f"{result.replay_seconds:.2f} s ({result.channel_steps_per_second:,.0f} channel-steps/s); "
+        f"{result.events_opened} alerts raised."
+    )
+    print(
+        f"2. Alert {alert['event_id']} on {alert['chan_id']}: {alert['severity']} "
+        f"{alert['kind']} anomaly, steps {alert['start']}-{alert['end']}."
+    )
+    print(
+        f"3. Explanation ({result.explanation_seconds:.2f} s, as of step "
+        f"{result.explanation['as_of_step']}):"
+    )
+    for sentence in result.explanation["sentences"]:
+        print(f"     {sentence['text']}")
+    v = result.stored_verdict
+    print(f"4. Verdict {v['id']} stored: {v['verdict']} by {v['operator']} at {v['created_at']}.")
+    return 0
+
+
 def _cmd_leaderboard(cfg: Config, args: argparse.Namespace) -> int:
     names = _detectors(args.detectors) + ([cfg.decision.name] if args.with_decision else [])
     try:
@@ -253,6 +298,14 @@ def build_parser() -> argparse.ArgumentParser:
     rep5 = sub.add_parser("explain-report", parents=[common], help="evaluate explanations")
     rep5.add_argument("--out", type=Path, default=Path("docs/EXPLAINABILITY.md"))
     rep5.add_argument("--jobs", type=int, default=1, help="channels processed in parallel")
+    srv = sub.add_parser("serve", parents=[common], help="run the operations service")
+    srv.add_argument("--host", default=None, help="override service.host")
+    srv.add_argument("--port", type=int, default=None, help="override service.port")
+    demo = sub.add_parser("demo", parents=[common], help="headless end-to-end demo")
+    demo.add_argument("--channel", action="append", default=[], help="replay only this channel")
+    demo.add_argument(
+        "--db", type=Path, default=Path("runs/service/demo.db"), help="demo database file"
+    )
     sub.add_parser("info", parents=[common], help="print resolved config and run directory")
     return parser
 
@@ -267,6 +320,8 @@ _COMMANDS = {
     "ablation": _cmd_ablation,
     "explain": _cmd_explain,
     "explain-report": _cmd_explain_report,
+    "serve": _cmd_serve,
+    "demo": _cmd_demo,
     "leaderboard": _cmd_leaderboard,
     "info": _cmd_info,
 }
