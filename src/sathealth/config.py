@@ -134,6 +134,71 @@ class BaselinesConfig(_Strict):
     iforest: IsolationForestConfig = IsolationForestConfig()
 
 
+class TrainingConfig(_Strict):
+    """Optimisation settings shared by the deep detectors (one model per channel)."""
+
+    epochs: int = Field(default=35, ge=1)
+    batch_size: int = Field(default=64, ge=1)
+    learning_rate: float = Field(default=1e-3, gt=0)
+    weight_decay: float = Field(default=0.0, ge=0)
+    patience: int = Field(
+        default=5, ge=1, description="Epochs without validation improvement before stopping."
+    )
+    min_delta: float = Field(default=1e-4, ge=0, description="Smallest loss drop that counts.")
+    grad_clip: float = Field(default=1.0, gt=0)
+    device: Literal["cpu", "mps", "cuda", "auto"] = Field(
+        default="cpu", description="cpu is the only bit-for-bit reproducible choice."
+    )
+    threads: int | None = Field(
+        default=1,
+        ge=1,
+        description="torch CPU threads per channel. 1 keeps results identical on every "
+        "machine (parallelise over channels with --jobs instead); None = torch default.",
+    )
+
+
+class LSTMConfig(_Strict):
+    window: int = Field(default=64, ge=2, description="Steps of history per forecast.")
+    hidden: int = Field(default=80, ge=1)
+    layers: int = Field(default=2, ge=1)
+    dropout: float = Field(default=0.3, ge=0.0, lt=1.0)
+    smoothing: int = Field(
+        default=30, ge=1, description="EWMA span applied to prediction errors; 1 disables."
+    )
+
+
+class TransformerConfig(_Strict):
+    window: int = Field(default=64, ge=2)
+    d_model: int = Field(default=32, ge=4)
+    heads: int = Field(default=4, ge=1)
+    layers: int = Field(default=2, ge=1)
+    feedforward: int = Field(default=64, ge=1)
+    latent: int = Field(default=16, ge=1, description="Bottleneck size; prevents identity.")
+    dropout: float = Field(default=0.1, ge=0.0, lt=1.0)
+    smoothing: int = Field(default=30, ge=1)
+
+    @model_validator(mode="after")
+    def _check_heads(self) -> "TransformerConfig":
+        if self.d_model % self.heads:
+            raise ValueError("transformer.d_model must be divisible by transformer.heads")
+        return self
+
+
+class DeepConfig(_Strict):
+    training: TrainingConfig = TrainingConfig()
+    lstm: LSTMConfig = LSTMConfig()
+    transformer: TransformerConfig = TransformerConfig()
+
+
+class TrackingConfig(_Strict):
+    mlflow_uri: str | None = Field(
+        default=None,
+        description="Log every evaluation to this MLflow tracking URI (e.g. file:./mlruns). "
+        "Requires the optional `tracking` extra.",
+    )
+    experiment: str = "sathealth"
+
+
 class Config(_Strict):
     seed: int = 42
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -145,6 +210,8 @@ class Config(_Strict):
     validation: ValidationConfig = ValidationConfig()
     evaluation: EvaluationConfig = EvaluationConfig()
     baselines: BaselinesConfig = BaselinesConfig()
+    deep: DeepConfig = DeepConfig()
+    tracking: TrackingConfig = TrackingConfig()
 
     @model_validator(mode="after")
     def _check_columns(self) -> "Config":

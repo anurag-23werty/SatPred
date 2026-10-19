@@ -59,3 +59,34 @@ baselines:
     window: 32
     n_estimators: 200
     max_samples: 256
+
+deep:                              # one model per channel, fit on train, early-stopped on val
+  training:
+    epochs: 35
+    batch_size: 64
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+    patience: 5                    # epochs without val-loss improvement before stopping
+    min_delta: 1.0e-4
+    grad_clip: 1.0
+    device: cpu                    # cpu | mps | cuda | auto; only cpu is bit-for-bit reproducible
+    threads: 1                     # per channel; 1 = identical results on any machine
+  lstm:                            # Telemanom-style next-step forecaster (Hundman et al. 2018)
+    window: 64
+    hidden: 80
+    layers: 2
+    dropout: 0.3
+    smoothing: 30                  # EWMA span over absolute forecast errors
+  transformer:                     # bottlenecked Transformer autoencoder
+    window: 64
+    d_model: 32
+    heads: 4
+    layers: 2
+    feedforward: 64
+    latent: 16
+    dropout: 0.1
+    smoothing: 30
+
+tracking:
+  mlflow_uri: null                 # e.g. file:./mlruns (needs `uv sync --extra tracking`)
+  experiment: sathealth

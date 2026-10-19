@@ -70,3 +70,13 @@ def test_evaluation_and_baseline_settings() -> None:
     assert cfg.evaluation.exclude_subsets[1] == ("constant_train", "nominal_out_of_range")
     with pytest.raises(ValidationError):
         load_config(None, overrides=["evaluation.quantile=1.5"])
+
+
+def test_deep_and_tracking_settings() -> None:
+    cfg = load_config(DEFAULT, overrides=["deep.lstm.window=32", "tracking.mlflow_uri=file:./m"])
+    assert cfg.deep.lstm.window == 32
+    assert cfg.deep.training.device == "cpu"
+    assert cfg.tracking.mlflow_uri == "file:./m"
+    assert load_config(DEFAULT) == load_config(None), "YAML mirrors the code defaults"
+    with pytest.raises(ValidationError, match="divisible"):
+        load_config(None, overrides=["deep.transformer.heads=5"])
