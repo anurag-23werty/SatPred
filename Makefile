@@ -1,10 +1,11 @@
 .DEFAULT_GOAL := help
 CONFIG ?= configs/default.yaml
+JOBS ?= 4
 
-.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate leaderboard requirements clean
+.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate evaluate-baselines leaderboard requirements banner clean
 
 help:  ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-19s\033[0m %s\n", $$1, $$2}'
 
 install:  ## Create the virtualenv and install git hooks
 	uv sync
@@ -44,11 +45,17 @@ prepare:  ## Validate, split, scale and store the dataset
 report:  ## Regenerate docs/DATA_CARD.md from the dataset
 	uv run sathealth report --config $(CONFIG) --out docs/DATA_CARD.md
 
-evaluate:  ## Evaluate all baseline detectors (results in runs/evaluations/)
-	uv run sathealth evaluate --config $(CONFIG)
+evaluate:  ## Evaluate every detector, JOBS channels in parallel (deep models: ~15 min)
+	uv run sathealth evaluate all --jobs $(JOBS) --config $(CONFIG)
+
+evaluate-baselines:  ## Evaluate only the classical baselines (~20 s)
+	uv run sathealth evaluate baselines --config $(CONFIG)
 
 leaderboard: evaluate  ## Regenerate docs/BASELINES.md
 	uv run sathealth leaderboard --config $(CONFIG) --out docs/BASELINES.md
+
+banner:  ## Regenerate the README banner (docs/assets/banner.svg)
+	uv run python scripts/build_banner.py
 
 requirements:  ## Regenerate requirements.txt from uv.lock
 	uv export --no-hashes --group dev -o requirements.txt
