@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -121,3 +123,16 @@ def test_short_validation_monitors_train_loss() -> None:
 def test_unfitted_detector_raises() -> None:
     with pytest.raises(RuntimeError, match="not fitted"):
         _transformer().score(_series(50, 0))
+
+
+def test_save_and_load_round_trip(lstm: LSTMDetector, tmp_path: Path) -> None:
+    path = tmp_path / "m" / "lstm.pt"
+    lstm.save(path)
+    restored = _lstm().load(path)
+    x = _series(120, 9)
+    np.testing.assert_array_equal(restored.score(x), lstm.score(x))
+    assert not list(path.parent.glob("*.part"))
+    with pytest.raises(ValueError, match="different settings"):
+        _lstm(smoothing=1).load(path)
+    with pytest.raises(RuntimeError, match="not fitted"):
+        _lstm().save(tmp_path / "x.pt")

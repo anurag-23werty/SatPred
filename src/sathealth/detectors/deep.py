@@ -7,6 +7,7 @@ scores with a causal EWMA, and keeps the training history for the run directory.
 """
 
 from abc import abstractmethod
+from pathlib import Path
 from typing import Any, Self
 
 import numpy as np
@@ -40,6 +41,7 @@ class DeepDetector(Detector):
         self.seed = seed
         self.device = resolve_device(self.training.device)
         self._model: nn.Module | None = None
+        self._n_features = 0
         self.history: TrainingHistory | None = None
 
     @abstractmethod
@@ -76,7 +78,7 @@ class DeepDetector(Detector):
             self.training,
             generator,
         )
-        self._model = model
+        self._model, self._n_features = model, int(train.shape[1])
         return self
 
     def score(self, x: FloatArray) -> FloatArray:
@@ -86,6 +88,27 @@ class DeepDetector(Detector):
         with torch.no_grad():
             errors = self._errors(model, x)
         return ewma(errors, self.smoothing)
+
+    def save(self, path: Path) -> None:
+        """Weights plus the settings needed to rebuild the network, written atomically."""
+        model = self.model
+        n_features = self._n_features
+        payload = {"state": model.state_dict(), "n_features": n_features, "params": self.params()}
+        tmp = path.with_suffix(path.suffix + ".part")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, tmp)
+        tmp.replace(path)
+
+    def load(self, path: Path) -> Self:
+        """Restore weights saved by :meth:`save`; settings must match this detector's."""
+        payload = torch.load(path, map_location=self.device, weights_only=True)
+        if payload["params"] != self.params():
+            raise ValueError(f"{path} was saved with different settings")
+        model = self._build(int(payload["n_features"])).to(self.device)
+        model.load_state_dict(payload["state"])
+        model.eval()
+        self._model, self._n_features = model, int(payload["n_features"])
+        return self
 
     def diagnostics(self) -> dict[str, Any]:
         if self.history is None:
