@@ -17,13 +17,14 @@ import json
 import shutil
 import tempfile
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from sathealth.config import Config, DecisionConfig
+from sathealth.config import Config, DecisionConfig, fingerprint_view
 from sathealth.data.schema import BoolArray, FloatArray
 from sathealth.decision.adaptive import adaptive_surprises
 from sathealth.decision.alarms import drop_short, hysteresis, merge_gaps, ndt_mask, prune
@@ -65,7 +66,7 @@ def decision_fingerprint(config: Config) -> str:
         {
             "inputs": {name: evaluation_dir_for(config, name).name for name in d.inputs},
             "decision": d.model_dump(mode="json", exclude={"name", "alarm_budget"}),
-            "evaluation": config.evaluation.model_dump(mode="json"),
+            "evaluation": fingerprint_view(config.evaluation),
         }
     )
 
@@ -112,6 +113,24 @@ def alarm_mask(surprise: FloatArray, d: DecisionConfig) -> BoolArray:
     return drop_short(merge_gaps(mask, d.merge_gap), d.min_duration)
 
 
+def decide_arrays(
+    d: DecisionConfig, val: Sequence[FloatArray], test: Sequence[FloatArray]
+) -> tuple[dict[str, FloatArray], FloatArray, BoolArray]:
+    """Per-input surprises, fused surprise and alarm mask for one test stream.
+
+    ``val`` and ``test`` hold one score array per input detector, in ``d.inputs`` order.
+    """
+    if d.recalibrate_every is None:
+        scored = [
+            TailCalibrator(d.calibration, d.tail_quantile, d.max_surprise).fit(v).surprise(t)
+            for v, t in zip(val, test, strict=True)
+        ]
+    else:
+        scored = adaptive_surprises(val, test, d, d.recalibrate_every)
+    fused = fuse(scored, d.fusion)
+    return dict(zip(d.inputs, scored, strict=True)), fused, alarm_mask(fused, d)
+
+
 @dataclass(frozen=True)
 class _Channel:
     result: ChannelResult
@@ -135,16 +154,7 @@ def _decide_channel(config: Config, data_dir: Path, chan_id: str, meta: dict[str
         tests.append(test)
         cal = TailCalibrator(d.calibration, d.tail_quantile, d.max_surprise).fit(val)
         calibration[name] = cal.to_dict()
-    if d.recalibrate_every is None:
-        scored = [
-            TailCalibrator(d.calibration, d.tail_quantile, d.max_surprise).fit(v).surprise(t)
-            for v, t in zip(vals, tests, strict=True)
-        ]
-    else:
-        scored = adaptive_surprises(vals, tests, d, d.recalibrate_every)
-    surprises = dict(zip(d.inputs, scored, strict=True))
-    fused = fuse(scored, d.fusion)
-    mask = alarm_mask(fused, d)
+    surprises, fused, mask = decide_arrays(d, vals, tests)
 
     cols = list(config.preprocess.value_columns)
     train_values = channel.train[:, cols]

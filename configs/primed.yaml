@@ -1,0 +1,10 @@
+# Live profile plus start-up priming (ADR 0009 B): each split is scored after the last 256
+# steps of the nominal history before it, removing the start-up transient of ADR 0008.
+#   sathealth evaluate lstm transformer --config configs/primed.yaml --jobs 7
+#   sathealth decide --config configs/primed.yaml
+evaluation:
+  prime_steps: 256
+decision:
+  name: fused-adaptive
+  recalibrate_every: 100
+  recalibrate_window: 2000

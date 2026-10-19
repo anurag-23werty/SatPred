@@ -113,11 +113,29 @@ class EvaluationConfig(_Strict):
     )
     oracle_thresholds: int = Field(default=200, ge=10)
     bootstrap: int = Field(default=1000, ge=0, description="Resamples for 95% CIs; 0 disables.")
+    prime_steps: int = Field(
+        default=0,
+        ge=0,
+        description="Score each split after this many steps of the preceding nominal history "
+        "(validation after train, test after validation); 0 scores splits cold.",
+    )
     exclude_subsets: tuple[tuple[str, ...], ...] = Field(
         default=(("constant_train",), ("constant_train", "nominal_out_of_range")),
         description="Extra result subsets, each excluding channels flagged by these Phase 1 "
         "quality checks.",
     )
+
+
+# Fields added after results were published, with the value that reproduces the old
+# behaviour. They are left out of run fingerprints at that value, so existing runs stay
+# addressable (a new setting at its "off" value must not orphan published results).
+_FINGERPRINT_NEUTRAL = {"prime_steps": 0}
+
+
+def fingerprint_view(section: BaseModel) -> dict[str, Any]:
+    """``section`` as JSON for fingerprints, without later-added fields at neutral values."""
+    dumped = section.model_dump(mode="json")
+    return {k: v for k, v in dumped.items() if _FINGERPRINT_NEUTRAL.get(k, object()) != v}
 
 
 class LimitConfig(_Strict):
@@ -299,11 +317,24 @@ class ServiceConfig(_Strict):
     health_window: int = Field(default=500, ge=10)
     health_sample_every: int = Field(default=50, ge=1)
     health_threshold: float = Field(default=50.0, gt=0, lt=100)
+    rebaseline_steps: int = Field(
+        default=500, ge=50, description="Recent steps that become the new normal on re-baseline."
+    )
+    drift_window: int = Field(default=1000, ge=100, description="Steps the drift monitor uses.")
     show_labels: bool = Field(
         default=False,
         description="Expose NASA's anomaly labels in the telemetry API (evaluation and demos "
         "only: a live mission has no labels).",
     )
+
+
+class ConfirmationConfig(_Strict):
+    """Independent confirmation on OPS-SAT-AD; see docs/adr/0009 (pre-registered)."""
+
+    raw_dir: Path = Path("data/raw/opssat")
+    manifest: str = "opssat.json"
+    val_fraction: float = Field(default=0.2, gt=0, lt=0.5)
+    out_dir: Path = Path("runs/confirmation")
 
 
 class Config(_Strict):
@@ -322,6 +353,7 @@ class Config(_Strict):
     decision: DecisionConfig = DecisionConfig()
     explain: ExplainConfig = ExplainConfig()
     service: ServiceConfig = ServiceConfig()
+    confirmation: ConfirmationConfig = ConfirmationConfig()
 
     @model_validator(mode="after")
     def _check_columns(self) -> "Config":

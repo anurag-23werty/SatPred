@@ -112,3 +112,20 @@ def test_explain_settings() -> None:
     assert cfg.paths.models_dir.name == "models"
     with pytest.raises(ValidationError):
         load_config(None, overrides=["explain.band_level=0.2"])
+
+
+def test_published_run_fingerprints_stay_stable() -> None:
+    """Adding a setting at its neutral value must not orphan published runs (ADR 0009)."""
+    from sathealth.config import fingerprint_view
+    from sathealth.pipeline.decide import decision_fingerprint
+    from sathealth.pipeline.evaluate import evaluation_fingerprint
+
+    default = load_config(DEFAULT)
+    assert evaluation_fingerprint(default, "limit") == "df4222df29cc"
+    assert evaluation_fingerprint(default, "lstm") == "749cc37f8ff3"
+    live = load_config(DEFAULT.parent / "live.yaml")
+    assert decision_fingerprint(live) == "ca6f56643841"
+    assert "prime_steps" not in fingerprint_view(default.evaluation)
+    primed = load_config(DEFAULT, overrides=["evaluation.prime_steps=256"])
+    assert fingerprint_view(primed.evaluation)["prime_steps"] == 256
+    assert evaluation_fingerprint(primed, "lstm") != "749cc37f8ff3"

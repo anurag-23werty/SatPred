@@ -29,8 +29,9 @@ from typing import Any
 
 import numpy as np
 
-from sathealth.config import Config
+from sathealth.config import Config, fingerprint_view
 from sathealth.data.schema import FloatArray
+from sathealth.detectors.base import Detector
 from sathealth.detectors.registry import build_detector
 from sathealth.evaluation.aggregate import ChannelResult, summarize_subsets
 from sathealth.evaluation.metrics import evaluate_predictions, oracle_event_f1
@@ -66,7 +67,7 @@ def evaluation_fingerprint(config: Config, detector: str) -> str:
             "data": data_fingerprint(config),
             "detector": detector,
             "params": build_detector(detector, config).params(),
-            "evaluation": config.evaluation.model_dump(mode="json"),
+            "evaluation": fingerprint_view(config.evaluation),
         }
     )
 
@@ -79,6 +80,20 @@ def channel_flags(channel_meta: dict[str, Any]) -> tuple[str, ...]:
     return tuple(
         sorted({i["check"] for i in channel_meta.get("issues", []) if i["severity"] != "info"})
     )
+
+
+def score_primed(model: Detector, history: FloatArray, x: FloatArray, steps: int) -> FloatArray:
+    """Score ``x`` with the last ``steps`` rows of ``history`` in front, keep ``x``'s scores.
+
+    In operations the stream is continuous; scoring a split cold makes the first window of
+    every split a start-up transient (ADR 0008). Priming removes it without changing the
+    model. ``steps=0`` scores ``x`` alone (the Phase 2-6 behaviour).
+    """
+    prefix = history[-steps:] if steps > 0 else history[:0]
+    if prefix.shape[0] == 0:
+        return model.score(x)
+    scores: FloatArray = model.score(np.concatenate([prefix, x]))[prefix.shape[0] :]
+    return scores
 
 
 @dataclass(frozen=True)
@@ -98,7 +113,7 @@ def _evaluate_channel(
     channel = load_prepared(data_dir, chan_id)
     t0 = time.perf_counter()
     model = build_detector(detector, config).fit(channel.train, channel.val)
-    val_scores = model.score(channel.val)
+    val_scores = score_primed(model, channel.train, channel.val, ecfg.prime_steps)
     train_scores = (
         model.score(channel.train) if val_scores.size < ecfg.min_threshold_rows else np.zeros(0)
     )
@@ -110,7 +125,7 @@ def _evaluate_channel(
         sigma=ecfg.sigma,
         min_rows=ecfg.min_threshold_rows,
     )
-    test_scores = model.score(channel.test)
+    test_scores = score_primed(model, channel.val, channel.test, ecfg.prime_steps)
     seconds = time.perf_counter() - t0
 
     segments = [(s.start, s.end) for s in channel.segments]

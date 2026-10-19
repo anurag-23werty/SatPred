@@ -51,6 +51,7 @@ evaluation:                        # see docs/adr/0004-evaluation-protocol.md
   min_event_gap: 0                 # merge predicted runs separated by <= this many steps
   oracle_thresholds: 200           # candidates for the label-aware upper bound (reported only)
   bootstrap: 1000                  # resamples over channels for 95% confidence intervals
+  prime_steps: 0                   # 256: score each split after its preceding history (ADR 0009)
   exclude_subsets:                 # also report results without channels flagged by these
     - [constant_train]
     - [constant_train, nominal_out_of_range]
@@ -143,4 +144,12 @@ service:                           # see docs/adr/0008-operations-service.md
   health_window: 500               # steps in the rolling health index
   health_sample_every: 50
   health_threshold: 50.0           # trend extrapolation target
+  rebaseline_steps: 500            # recent steps accepted as the new normal on re-baseline
+  drift_window: 1000               # steps the drift monitor compares with training
   show_labels: false               # expose NASA labels (evaluation/demo only)
+
+confirmation:                      # see docs/adr/0009 (pre-registered, one-shot)
+  raw_dir: data/raw/opssat         # OPSSAT-AD, pinned by SHA-256 (Zenodo 15108715)
+  manifest: opssat.json
+  val_fraction: 0.2                # last 20% of nominal training points, by segment
+  out_dir: runs/confirmation
