@@ -5,7 +5,12 @@ import pytest
 from sathealth.config import Config, load_config
 from sathealth.data.download import Manifest
 from sathealth.pipeline.evaluate import evaluate_detector
-from sathealth.pipeline.leaderboard import load_summaries, render_leaderboard, write_leaderboard
+from sathealth.pipeline.leaderboard import (
+    compare_with_baselines,
+    load_summaries,
+    render_leaderboard,
+    write_leaderboard,
+)
 from sathealth.pipeline.prepare import prepare_dataset
 
 
@@ -29,7 +34,7 @@ def test_leaderboard_ranks_by_composite_f1(config: Config, tmp_path: Path) -> No
         evaluate_detector(config, name)
     out = write_leaderboard(config, ["random", "limit"], tmp_path / "BASELINES.md")
     text = out.read_text()
-    assert text.startswith("# Baseline results")
+    assert text.startswith("# Detector results")
     assert "## All (3 channels" in text
     assert "## excluding constant_train+nominal_out_of_range" in text
     assert "random scores reach" in text
@@ -53,3 +58,44 @@ def test_missing_evaluation_is_actionable(config: Config) -> None:
 def test_render_requires_summaries() -> None:
     with pytest.raises(ValueError, match="no summaries"):
         render_leaderboard([])
+
+
+def test_deep_detectors_are_compared_with_the_best_baseline(config: Config, tmp_path: Path) -> None:
+    tiny = load_config(
+        None,
+        overrides=[
+            f"paths.raw_dir={config.paths.raw_dir}",
+            f"paths.processed_dir={config.paths.processed_dir}",
+            f"paths.runs_dir={config.paths.runs_dir}",
+            "evaluation.bootstrap=20",
+            "deep.training.epochs=1",
+            "deep.lstm.window=16",
+            "deep.lstm.hidden=4",
+        ],
+    )
+    names = ["limit", "zscore", "random", "lstm"]
+    for name in names:
+        evaluate_detector(tiny, name)
+    summaries = load_summaries(tiny, names)
+    rows = compare_with_baselines(tiny, summaries)
+    assert [(r["detector"], r["subset"], r["metric"]) for r in rows] == [
+        ("lstm", subset, metric)
+        for subset in ("all", "SMAP", "MSL")
+        for metric in ("composite_f1", "average_precision")
+    ]
+    by_name = {s["detector"]: s for s in summaries}
+    key = {"composite_f1": "composite_f1", "average_precision": "average_precision_macro"}
+    for row in rows:
+        assert row["baseline"] in {"limit", "zscore"}, "random is a floor, never the rival"
+        best = max(
+            by_name[b]["subsets"][row["subset"]][key[row["metric"]]] for b in ("limit", "zscore")
+        )
+        assert row["baseline_value"] == best
+        assert row["delta"] == pytest.approx(row["value"] - best)
+        if row["metric"] == "average_precision":
+            assert row["marginal_cis_separate"] is None
+    text = render_leaderboard(summaries, rows)
+    assert "## Versus the best baseline" in text
+    assert "| lstm | SMAP | Composite F1 |" in text
+    assert "| lstm | MSL | AUC-PR |" in text
+    assert compare_with_baselines(tiny, [by_name["lstm"]]) == []
