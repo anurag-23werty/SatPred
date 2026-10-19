@@ -1,6 +1,6 @@
 [project]
 name = "sathealth"
-version = "0.2.0"
+version = "0.3.0"
 description = "Explainable AI for satellite health monitoring and early anomaly detection"
 requires-python = ">=3.12,<3.14"
 dependencies = [
@@ -8,7 +8,11 @@ dependencies = [
     "pydantic>=2.6,<3",
     "pyyaml>=6.0,<7",
     "scikit-learn>=1.5,<2",
+    "torch>=2.5,<3",
 ]
+
+[project.optional-dependencies]
+tracking = ["mlflow>=2.14,<4"]
 
 [project.scripts]
 sathealth = "sathealth.cli:main"
@@ -22,6 +26,16 @@ dev = [
     "ruff>=0.6",
     "types-pyyaml>=6.0",
 ]
+
+# CPU-only PyTorch wheels on Linux (CI): the default PyPI wheel pulls ~2 GB of CUDA libraries.
+# macOS and Windows wheels on PyPI are already CPU/MPS builds.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling>=1.24"]
