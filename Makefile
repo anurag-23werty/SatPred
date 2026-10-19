@@ -77,7 +77,7 @@ demo:  ## Headless demo: replay → explained alert → operator verdict stored
 leaderboard: evaluate decide  ## Regenerate docs/BASELINES.md
 	uv run sathealth leaderboard --with-decision --config $(CONFIG) --out docs/BASELINES.md
 
-banner:  ## Regenerate the README banner (docs/assets/banner.svg)
+banner:  ## Regenerate the animated README art (banner.svg, pipeline.svg)
 	uv run python scripts/build_banner.py
 
 requirements:  ## Regenerate requirements.txt from uv.lock

@@ -2,15 +2,36 @@
   <img src="docs/assets/banner.svg" alt="sathealth: a satellite in orbit above Earth, with its telemetry watched by an explainable AI that flags an early anomaly" width="100%">
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python: 3.12 | 3.13">
+  <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch: 2.x">
+  <img src="https://img.shields.io/badge/FastAPI-live%20service-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI: live service">
+  <img src="https://img.shields.io/badge/scikit--learn-baselines-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white" alt="scikit-learn: baselines">
+  <img src="https://img.shields.io/badge/uv-managed-DE5FE9?style=for-the-badge&logo=uv&logoColor=white" alt="uv: managed">
+  <br>
+  <img src="https://img.shields.io/badge/tests-331%20passing-22C55E?style=for-the-badge&logo=pytest&logoColor=white" alt="tests: 331 passing">
+  <img src="https://img.shields.io/badge/coverage-97%25-16A34A?style=for-the-badge" alt="coverage: 97%">
+  <img src="https://img.shields.io/badge/mypy-strict-2A6DB2?style=for-the-badge" alt="mypy: strict">
+  <img src="https://img.shields.io/badge/code%20style-ruff-D7FF64?style=for-the-badge&logo=ruff&logoColor=black" alt="code style: ruff">
+  <br>
+  <img src="https://img.shields.io/badge/data-NASA%20SMAP%20%C2%B7%20MSL-0B3D91?style=for-the-badge&logo=nasa&logoColor=white" alt="data: NASA SMAP · MSL">
+  <img src="https://img.shields.io/badge/independently%20tested%20on-ESA%20OPS--SAT-003247?style=for-the-badge" alt="independently tested on: ESA OPS-SAT">
+  <img src="https://img.shields.io/badge/results-pre--registered-8B5CF6?style=for-the-badge" alt="results: pre-registered">
+  <img src="https://img.shields.io/badge/explanations-100%25%20grounded-EC4899?style=for-the-badge" alt="explanations: 100% grounded">
+</p>
+
 # sathealth: explainable satellite health monitoring
 
 AI-based satellite health monitoring with early anomaly detection and explainable alerts.
-Built for the **Odisha Seva First Innovation Challenge**.
 
 Satellites downlink thousands of telemetry channels. Fixed limit checks miss slow drifts and
 broken relationships between channels, and they never say *why*. sathealth combines an
 ensemble of detectors with an explainability layer, so each alert says which channel, when
 the problem started, which dependency broke and what normal would have looked like.
+
+<p align="center">
+  <img src="docs/assets/pipeline.svg" alt="How an alert is born: telemetry, detectors (LSTM forecaster, Transformer autoencoder), decision layer (EVT surprise, fusion, hysteresis), explanation (onset, counterfactual, attribution, grounded text), operator (live console, verdicts, re-baseline)" width="100%">
+</p>
 
 > **Status: all seven phases complete.** The Phase 4 gains on SMAP did **not** replicate on an
 > independent spacecraft (ESA OPS-SAT, pre-registered): see
