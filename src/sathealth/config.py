@@ -1,0 +1,138 @@
+"""Typed, validated configuration loaded from YAML with dotted-key overrides.
+
+All tunables live in ``configs/*.yaml``. Unknown keys are rejected so a typo fails loudly
+instead of silently falling back to a default::
+
+    cfg = load_config("configs/default.yaml", overrides=["windows.size=128"])
+"""
+
+from enum import StrEnum
+from pathlib import Path
+from typing import Any, Literal
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+Spacecraft = Literal["SMAP", "MSL"]
+
+
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class DuplicatePolicy(StrEnum):
+    """How to treat a channel listed more than once in the label file.
+
+    ``drop`` removes it entirely (default). SMAP ``P-2`` has two rows with conflicting labels;
+    dropping it leaves 53 SMAP + 27 MSL channels, matching the widely used OmniAnomaly
+    preprocessing, which also excludes ``P-2``.
+    ``first`` keeps the first row, ``union`` merges the anomaly segments of all rows.
+    """
+
+    DROP = "drop"
+    FIRST = "first"
+    UNION = "union"
+
+
+class PathsConfig(_Strict):
+    raw_dir: Path = Path("data/raw/telemanom")
+    processed_dir: Path = Path("data/processed")
+
+
+class DatasetConfig(_Strict):
+    name: Literal["telemanom"] = "telemanom"
+    spacecraft: tuple[Spacecraft, ...] = ("SMAP", "MSL")
+    channels: tuple[str, ...] | None = Field(
+        default=None, description="Optional subset of channel ids; None means all."
+    )
+    duplicate_policy: DuplicatePolicy = DuplicatePolicy.DROP
+
+
+class DownloadConfig(_Strict):
+    manifest: str = Field(
+        default="telemanom.json",
+        description="Manifest file name inside sathealth/data/manifests, or a filesystem path.",
+    )
+    max_workers: int = Field(default=8, ge=1, le=32)
+    retries: int = Field(default=4, ge=0, le=10)
+    timeout_s: float = Field(default=60.0, gt=0)
+    backoff_s: float = Field(default=1.0, ge=0)
+
+
+class PreprocessConfig(_Strict):
+    scaler: Literal["robust", "standard", "none"] = "robust"
+    value_columns: tuple[int, ...] = Field(
+        default=(0,),
+        description="Columns holding continuous telemetry. The remaining columns are one-hot "
+        "command flags and are passed through unscaled.",
+    )
+    val_fraction: float = Field(default=0.2, ge=0.0, lt=0.5)
+    split_gap: int = Field(
+        default=0, ge=0, description="Rows discarded between train and validation tails."
+    )
+    min_scale: float = Field(
+        default=1e-6, gt=0, description="Spread below this is treated as a constant signal."
+    )
+
+
+class WindowConfig(_Strict):
+    size: int = Field(default=100, ge=2)
+    stride: int = Field(default=1, ge=1)
+    label_rule: Literal["any", "last"] = "any"
+
+
+class ValidationConfig(_Strict):
+    fail_on_error: bool = True
+    out_of_range_warn_fraction: float = Field(default=0.05, ge=0.0, le=1.0)
+    max_anomaly_fraction: float = Field(default=0.3, gt=0.0, le=1.0)
+    low_cardinality_max: int = Field(default=10, ge=1)
+
+
+class Config(_Strict):
+    seed: int = 42
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    paths: PathsConfig = PathsConfig()
+    dataset: DatasetConfig = DatasetConfig()
+    download: DownloadConfig = DownloadConfig()
+    preprocess: PreprocessConfig = PreprocessConfig()
+    windows: WindowConfig = WindowConfig()
+    validation: ValidationConfig = ValidationConfig()
+
+    @model_validator(mode="after")
+    def _check_columns(self) -> "Config":
+        if len(set(self.preprocess.value_columns)) != len(self.preprocess.value_columns):
+            raise ValueError("preprocess.value_columns contains duplicates")
+        if any(c < 0 for c in self.preprocess.value_columns):
+            raise ValueError("preprocess.value_columns must be non-negative")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-safe dict (paths as strings) for manifests and fingerprints."""
+        return self.model_dump(mode="json")
+
+
+def _apply_override(tree: dict[str, Any], dotted: str) -> None:
+    if "=" not in dotted:
+        raise ValueError(f"override must look like key.sub=value, got {dotted!r}")
+    key, raw = dotted.split("=", 1)
+    parts = key.strip().split(".")
+    node = tree
+    for part in parts[:-1]:
+        child = node.setdefault(part, {})
+        if not isinstance(child, dict):
+            raise ValueError(f"cannot override {key!r}: {part!r} is not a section")
+        node = child
+    node[parts[-1]] = yaml.safe_load(raw)  # "128" -> 128, "[SMAP]" -> ["SMAP"], "null" -> None
+
+
+def load_config(path: str | Path | None = None, overrides: list[str] | None = None) -> Config:
+    """Load YAML (or defaults when ``path`` is None) and apply ``key.sub=value`` overrides."""
+    tree: dict[str, Any] = {}
+    if path is not None:
+        loaded = yaml.safe_load(Path(path).read_text()) or {}
+        if not isinstance(loaded, dict):
+            raise ValueError(f"{path}: top level must be a mapping")
+        tree = loaded
+    for item in overrides or []:
+        _apply_override(tree, item)
+    return Config.model_validate(tree)

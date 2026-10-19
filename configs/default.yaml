@@ -1,0 +1,39 @@
+# Default configuration. Override any key from the CLI, e.g.
+#   sathealth prepare --set windows.size=128 --set dataset.spacecraft=[SMAP]
+seed: 42
+log_level: INFO
+
+paths:
+  raw_dir: data/raw/telemanom      # verified raw .npy files + labeled_anomalies.csv
+  processed_dir: data/processed    # one sub-directory per config fingerprint
+
+dataset:
+  name: telemanom                  # NASA SMAP + MSL (Hundman et al., KDD 2018)
+  spacecraft: [SMAP, MSL]
+  channels: null                   # e.g. [A-1, P-1] for a quick run
+  duplicate_policy: drop           # drop | first | union  (see docs/adr/0002)
+
+download:
+  manifest: telemanom.json         # pinned mirror + SHA-256 of every file
+  max_workers: 8
+  retries: 4
+  timeout_s: 60
+  backoff_s: 1.0
+
+preprocess:
+  scaler: robust                   # robust (median/IQR) | standard | none  (see docs/adr/0003)
+  value_columns: [0]               # column 0 = telemetry value; 1.. = one-hot command flags
+  val_fraction: 0.2                # chronological tail of the train series
+  split_gap: 0
+  min_scale: 1.0e-6
+
+windows:
+  size: 100
+  stride: 1
+  label_rule: any                  # any: window is anomalous if any step is | last: last step
+
+validation:
+  fail_on_error: true
+  out_of_range_warn_fraction: 0.05
+  max_anomaly_fraction: 0.3
+  low_cardinality_max: 10
