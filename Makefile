@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 CONFIG ?= configs/default.yaml
 
-.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report clean
+.PHONY: help install lint format typecheck test test-data coverage check download verify prepare report evaluate leaderboard requirements clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -43,6 +43,15 @@ prepare:  ## Validate, split, scale and store the dataset
 
 report:  ## Regenerate docs/DATA_CARD.md from the dataset
 	uv run sathealth report --config $(CONFIG) --out docs/DATA_CARD.md
+
+evaluate:  ## Evaluate all baseline detectors (results in runs/evaluations/)
+	uv run sathealth evaluate --config $(CONFIG)
+
+leaderboard: evaluate  ## Regenerate docs/BASELINES.md
+	uv run sathealth leaderboard --config $(CONFIG) --out docs/BASELINES.md
+
+requirements:  ## Regenerate requirements.txt from uv.lock
+	uv export --no-hashes --group dev -o requirements.txt
 
 clean:  ## Remove caches (keeps data/)
 	rm -rf .mypy_cache .ruff_cache .pytest_cache .coverage htmlcov

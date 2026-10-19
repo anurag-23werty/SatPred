@@ -46,3 +46,42 @@ def test_prepare_missing_data_exits_1(tmp_path: Path) -> None:
 
 def test_verify_fails_on_missing_files(tmp_path: Path) -> None:
     assert main(["verify", "--set", f"paths.raw_dir={tmp_path}"]) == 1
+
+
+def test_evaluate_and_leaderboard(
+    raw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = [
+        *_args(raw_root, tmp_path),
+        "--set",
+        f"paths.runs_dir={tmp_path / 'runs'}",
+        "--set",
+        "evaluation.bootstrap=10",
+    ]
+    assert main(["prepare", "--skip-verify", *args]) == 0
+    assert main(["evaluate", "limit", "random", *args]) == 0
+    out = capsys.readouterr().out
+    assert "limit" in out
+    assert "composite_f1=" in out
+    board = tmp_path / "BASELINES.md"
+    assert main(["leaderboard", "limit", "random", "--out", str(board), *args]) == 0
+    assert "| limit |" in board.read_text()
+    assert main(["leaderboard", "zscore", "--out", str(board), *args]) == 1
+
+
+def test_evaluate_without_prepared_data_exits_1(tmp_path: Path) -> None:
+    overrides = [
+        "--set",
+        f"paths.processed_dir={tmp_path}",
+        "--set",
+        f"paths.runs_dir={tmp_path / 'runs'}",
+    ]
+    assert main(["evaluate", "limit", *overrides]) == 1
+
+
+def test_detector_selection_defaults_to_all() -> None:
+    from sathealth.cli import _detectors, build_parser
+
+    args = build_parser().parse_args(["evaluate"])
+    assert _detectors(args.detectors) == ["limit", "zscore", "iforest", "random"]
+    assert _detectors(build_parser().parse_args(["evaluate", "limit"]).detectors) == ["limit"]

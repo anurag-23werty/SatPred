@@ -4,6 +4,8 @@
     sathealth verify     re-check every raw file against its pinned SHA-256
     sathealth prepare    validate, split, scale and store the dataset
     sathealth report     write the Markdown data card
+    sathealth evaluate   score detectors under the fixed evaluation protocol
+    sathealth leaderboard  write the Markdown results table
     sathealth info       print the resolved config and where outputs go
 
 Every command accepts ``--config`` and repeatable ``--set key.sub=value`` overrides.
@@ -20,8 +22,11 @@ from sathealth import __version__
 from sathealth.config import Config, load_config
 from sathealth.data.download import download_dataset, load_manifest, verify_dataset
 from sathealth.data.telemanom import TelemanomDataset
+from sathealth.detectors.registry import DETECTOR_NAMES
 from sathealth.features.validation import validate_dataset
 from sathealth.logging import configure_logging, get_logger
+from sathealth.pipeline.evaluate import evaluate_detector
+from sathealth.pipeline.leaderboard import write_leaderboard
 from sathealth.pipeline.prepare import (
     DataIntegrityError,
     DataQualityError,
@@ -82,6 +87,37 @@ def _cmd_report(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _detectors(names: str | list[str]) -> list[str]:
+    # argparse yields the bare default string "all" when no detector is given
+    selected = [names] if isinstance(names, str) else names
+    return list(DETECTOR_NAMES) if "all" in selected else selected
+
+
+def _cmd_evaluate(cfg: Config, args: argparse.Namespace) -> int:
+    try:
+        for name in _detectors(args.detectors):
+            result = evaluate_detector(cfg, name, force=args.force)
+            overall = result.summary["subsets"]["all"]
+            print(
+                f"{name:8s} composite_f1={overall['composite_f1']:.3f} "
+                f"event_f1={overall['event']['f1']:.3f} {result.run_dir}"
+            )
+    except FileNotFoundError as exc:
+        log.error("evaluate failed", reason=str(exc))
+        return 1
+    return 0
+
+
+def _cmd_leaderboard(cfg: Config, args: argparse.Namespace) -> int:
+    try:
+        out = write_leaderboard(cfg, _detectors(args.detectors), args.out)
+    except FileNotFoundError as exc:
+        log.error("leaderboard failed", reason=str(exc))
+        return 1
+    log.info("wrote leaderboard", path=out)
+    return 0
+
+
 def _cmd_info(cfg: Config, _: argparse.Namespace) -> int:
     print(
         json.dumps(
@@ -121,6 +157,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rep = sub.add_parser("report", parents=[common], help="write the Markdown data card")
     rep.add_argument("--out", type=Path, default=None, help="output path (default: stdout)")
+    ev = sub.add_parser("evaluate", parents=[common], help="evaluate detectors")
+    ev.add_argument(
+        "detectors",
+        nargs="*",
+        choices=[*DETECTOR_NAMES, "all"],
+        default="all",  # a list default trips argparse's choices check for nargs="*"
+        help="detectors to run (default: all)",
+    )
+    ev.add_argument("--force", action="store_true", help="re-run even if results exist")
+    lb = sub.add_parser("leaderboard", parents=[common], help="write the results table")
+    lb.add_argument("detectors", nargs="*", choices=[*DETECTOR_NAMES, "all"], default="all")
+    lb.add_argument("--out", type=Path, default=Path("docs/BASELINES.md"))
     sub.add_parser("info", parents=[common], help="print resolved config and run directory")
     return parser
 
@@ -130,6 +178,8 @@ _COMMANDS = {
     "verify": _cmd_verify,
     "prepare": _cmd_prepare,
     "report": _cmd_report,
+    "evaluate": _cmd_evaluate,
+    "leaderboard": _cmd_leaderboard,
     "info": _cmd_info,
 }
 
