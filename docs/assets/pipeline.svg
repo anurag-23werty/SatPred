@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 210" width="1280"
+     height="210" role="img" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif"
+     aria-label="Pipeline: telemetry, detectors, decision layer, explanation, operator">
+  <style>
+    .flow { animation: flow 1.8s linear infinite; opacity: 0; }
+    .glow { animation: glow 2.5s ease-in-out infinite; }
+    @keyframes flow {
+      0% { transform: translateX(0); opacity: 0; }
+      15% { opacity: 1; } 85% { opacity: 1; }
+      100% { transform: translateX(var(--d)); opacity: 0; }
+    }
+    @keyframes glow { 0%, 100% { opacity: .08; } 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) {
+      .flow { animation: none; opacity: 0; } .glow { animation: none; }
+    }
+  </style>
+  <rect width="1280" height="210" rx="16" fill="#030712"/>
+  <text x="40" y="34" font-size="14" font-weight="600" fill="#94a3b8"
+        letter-spacing="1.5">HOW AN ALERT IS BORN</text>
+  <g><rect x="40.0" y="52" width="200" height="120" rx="14" fill="#0b1530" stroke="#38bdf8" stroke-width="2"/><rect class="glow" x="40.0" y="52" width="200" height="120" rx="14" fill="none" stroke="#38bdf8" stroke-width="6" opacity=".15" style="animation-delay:0.0s"/><circle cx="66.0" cy="82" r="12" fill="#38bdf8"/><text x="66.0" y="87" text-anchor="middle" font-size="13" font-weight="800" fill="#030712">1</text><text x="86.0" y="88" font-size="18" font-weight="700" fill="#f8fafc">Telemetry</text><text x="58.0" y="124" font-size="13" fill="#cbd5e1">NASA SMAP · MSL</text><text x="58.0" y="146" font-size="13" fill="#94a3b8">ESA OPS-SAT replay</text></g>
+  <line x1="246.0" y1="112.0" x2="284.0" y2="112.0" stroke="#334a7a" stroke-width="2"/><polygon points="284.0,112.0 276.0,107.0 276.0,117.0" fill="#334a7a"/>
+  <circle class="flow" cx="246.0" cy="112.0" r="4" fill="#a78bfa" style="--d:30.0px;animation-delay:0.0s"/>
+  <circle class="flow" cx="246.0" cy="112.0" r="4" fill="#a78bfa" style="--d:30.0px;animation-delay:0.9s"/>
+  <g><rect x="290.0" y="52" width="200" height="120" rx="14" fill="#0b1530" stroke="#a78bfa" stroke-width="2"/><rect class="glow" x="290.0" y="52" width="200" height="120" rx="14" fill="none" stroke="#a78bfa" stroke-width="6" opacity=".15" style="animation-delay:0.5s"/><circle cx="316.0" cy="82" r="12" fill="#a78bfa"/><text x="316.0" y="87" text-anchor="middle" font-size="13" font-weight="800" fill="#030712">2</text><text x="336.0" y="88" font-size="18" font-weight="700" fill="#f8fafc">Detectors</text><text x="308.0" y="124" font-size="13" fill="#cbd5e1">LSTM forecaster</text><text x="308.0" y="146" font-size="13" fill="#94a3b8">Transformer AE</text></g>
+  <line x1="496.0" y1="112.0" x2="534.0" y2="112.0" stroke="#334a7a" stroke-width="2"/><polygon points="534.0,112.0 526.0,107.0 526.0,117.0" fill="#334a7a"/>
+  <circle class="flow" cx="496.0" cy="112.0" r="4" fill="#fb923c" style="--d:30.0px;animation-delay:0.4s"/>
+  <circle class="flow" cx="496.0" cy="112.0" r="4" fill="#fb923c" style="--d:30.0px;animation-delay:1.3s"/>
+  <g><rect x="540.0" y="52" width="200" height="120" rx="14" fill="#0b1530" stroke="#fb923c" stroke-width="2"/><rect class="glow" x="540.0" y="52" width="200" height="120" rx="14" fill="none" stroke="#fb923c" stroke-width="6" opacity=".15" style="animation-delay:1.0s"/><circle cx="566.0" cy="82" r="12" fill="#fb923c"/><text x="566.0" y="87" text-anchor="middle" font-size="13" font-weight="800" fill="#030712">3</text><text x="586.0" y="88" font-size="18" font-weight="700" fill="#f8fafc">Decision</text><text x="558.0" y="124" font-size="13" fill="#cbd5e1">EVT surprise · fusion</text><text x="558.0" y="146" font-size="13" fill="#94a3b8">hysteresis · events</text></g>
+  <line x1="746.0" y1="112.0" x2="784.0" y2="112.0" stroke="#334a7a" stroke-width="2"/><polygon points="784.0,112.0 776.0,107.0 776.0,117.0" fill="#334a7a"/>
+  <circle class="flow" cx="746.0" cy="112.0" r="4" fill="#f472b6" style="--d:30.0px;animation-delay:0.8s"/>
+  <circle class="flow" cx="746.0" cy="112.0" r="4" fill="#f472b6" style="--d:30.0px;animation-delay:1.7s"/>
+  <g><rect x="790.0" y="52" width="200" height="120" rx="14" fill="#0b1530" stroke="#f472b6" stroke-width="2"/><rect class="glow" x="790.0" y="52" width="200" height="120" rx="14" fill="none" stroke="#f472b6" stroke-width="6" opacity=".15" style="animation-delay:1.5s"/><circle cx="816.0" cy="82" r="12" fill="#f472b6"/><text x="816.0" y="87" text-anchor="middle" font-size="13" font-weight="800" fill="#030712">4</text><text x="836.0" y="88" font-size="18" font-weight="700" fill="#f8fafc">Explanation</text><text x="808.0" y="124" font-size="13" fill="#cbd5e1">onset · counterfactual</text><text x="808.0" y="146" font-size="13" fill="#94a3b8">attribution · grounded text</text></g>
+  <line x1="996.0" y1="112.0" x2="1034.0" y2="112.0" stroke="#334a7a" stroke-width="2"/><polygon points="1034.0,112.0 1026.0,107.0 1026.0,117.0" fill="#334a7a"/>
+  <circle class="flow" cx="996.0" cy="112.0" r="4" fill="#34d399" style="--d:30.0px;animation-delay:1.2s"/>
+  <circle class="flow" cx="996.0" cy="112.0" r="4" fill="#34d399" style="--d:30.0px;animation-delay:2.1s"/>
+  <g><rect x="1040.0" y="52" width="200" height="120" rx="14" fill="#0b1530" stroke="#34d399" stroke-width="2"/><rect class="glow" x="1040.0" y="52" width="200" height="120" rx="14" fill="none" stroke="#34d399" stroke-width="6" opacity=".15" style="animation-delay:2.0s"/><circle cx="1066.0" cy="82" r="12" fill="#34d399"/><text x="1066.0" y="87" text-anchor="middle" font-size="13" font-weight="800" fill="#030712">5</text><text x="1086.0" y="88" font-size="18" font-weight="700" fill="#f8fafc">Operator</text><text x="1058.0" y="124" font-size="13" fill="#cbd5e1">live console</text><text x="1058.0" y="146" font-size="13" fill="#94a3b8">verdicts · re-baseline</text></g>
+  <text x="1240" y="196" text-anchor="end" font-size="12" fill="#64748b">
+    every step causal · every sentence grounded · every claim pre-registered</text>
+</svg>
