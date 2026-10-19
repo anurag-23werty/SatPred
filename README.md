@@ -12,7 +12,7 @@ broken relationships between channels, and they never say *why*. sathealth combi
 ensemble of detectors with an explainability layer, so each alert says which channel, when
 the problem started, which dependency broke and what normal would have looked like.
 
-> **Status: Phase 5 (explainability) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md) and
+> **Status: Phase 6 (operations service and console) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md) and
 > the results in [BASELINES.md](docs/BASELINES.md) (detectors),
 > [DECISION.md](docs/DECISION.md) (alarms) and [EXPLAINABILITY.md](docs/EXPLAINABILITY.md)
 > (explanations).
@@ -29,6 +29,8 @@ make evaluate-baselines  # classical baselines (~20 s)
 make leaderboard # every detector incl. deep models → docs/BASELINES.md (~1 h on 4 cores)
 make ablation    # every decision-layer variant on saved scores → docs/DECISION.md (seconds)
 make explain     # explain live alarms + evaluate → docs/EXPLAINABILITY.md (~10 min first time)
+make serve       # operator console on http://127.0.0.1:8000 (API docs at /docs)
+make demo        # headless: replay → explained alert → operator verdict stored
 make check       # ruff + mypy --strict + unit tests
 make test-data   # integration tests against the real dataset
 ```
@@ -118,6 +120,24 @@ type and evidence ([ADR 0006](docs/adr/0006-decision-layer.md),
 - **Anomaly type** (point vs contextual) matches the labels 80% of the time (majority class:
   68%).
 
+## Operator console (Phase 6)
+
+`make serve` starts the service and opens the console at http://127.0.0.1:8000. Every alert
+streams in live, with its explanation, a counterfactual chart and buttons to confirm it or
+mark it a false alarm ([ADR 0008](docs/adr/0008-operations-service.md)).
+
+![Operator console](docs/assets/console.jpg)
+
+- **Live = batch:** the step-by-step decision engine reproduces the offline results exactly
+  (199 of 199 events), so every number in this README describes what the console shows.
+- **Health:** a per-channel index (severity-weighted share of recent steps in alarm) rolled up
+  per channel family. There is no remaining-useful-life claim, because the data has no
+  run-to-failure histories; trends are labelled extrapolations.
+- **Feedback:** operator verdicts are stored in SQLite, summarised as operator-confirmed
+  precision, and exported for retraining.
+- **Production basics:** health and readiness probes, Prometheus metrics, OpenAPI docs,
+  server-sent events, p95 latency under 2.5 ms with 80 channels.
+
 ## Explainable alerts (Phase 5)
 
 Every alarm comes with an explanation an operator can check
@@ -171,6 +191,8 @@ src/sathealth/
   detectors/       limit check, robust z-score, Isolation Forest, random, LSTM, Transformer
   decision/        EVT calibration, fusion, alarm rules, streaming recalibration, events
   explain/         onset, counterfactual, Integrated Gradients, grounded narrative, LLM
+  ops/             streaming decision engine, health index, trend extrapolation
+  service/         FastAPI app, SSE stream, replay engine, SQLite store, web console
   models/          PyTorch networks, training loop, device and seeding, error smoothing
   pipeline/        prepare, evaluate, decide, ablation, explain, reports, leaderboard
   utils/           hashing, seeding, provenance, parallel map

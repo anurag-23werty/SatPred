@@ -3,8 +3,9 @@
 The target system has six layers. **Phase 1 implements L2** (ingest and preprocessing) for
 the NASA SMAP/MSL benchmark. **Phase 2 adds the evaluation harness and the L3 statistical
 baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder) **,
-Phase 4 the L4 decision layer** (EVT calibration, fusion, alarms, events) **and Phase 5 the
-L5 explanation engine** (onset, counterfactual, attribution, grounded narrative).
+Phase 4 the L4 decision layer** (EVT calibration, fusion, alarms, events) **, Phase 5 the
+L5 explanation engine** (onset, counterfactual, attribution, grounded narrative) **and Phase 6
+the L6 operations service** (live decisions, health, API, console, feedback).
 The other layers arrive in the phases listed in
 [ROADMAP.md](ROADMAP.md).
 
@@ -30,10 +31,10 @@ flowchart TB
     end
     subgraph L5[L5 · Explain & prognose]
         XAI[XAI engine<br/>onset · counterfactual rollout + band ·<br/>Integrated Gradients · grounded narrator]
-        HI[Health Index + RUL]
+        HI[Health index<br/>+ trend extrapolation]
     end
     subgraph L6[L6 · Operate & learn]
-        API[FastAPI] --> UI[Operator console] --> FB[Operator feedback] --> MLOPS[Learning loop<br/>MLflow · drift · retrain]
+        API[FastAPI + SSE] --> UI[Web console] --> FB[Operator verdicts<br/>SQLite] --> MLOPS[Learning loop<br/>MLflow · drift · retrain]
     end
     BUS -->|TM downlink| GS
     WIN --> M1 & M2 & M3 & M4
@@ -90,4 +91,6 @@ load_prepared() ───────► PreparedChannel.windows()    zero-copy 
 | `sathealth.explain` | Onset, counterfactual rollout and band, Integrated Gradients, grounded narrative and checker, optional grounded LLM rewording |
 | `sathealth.pipeline.explain` | Verified model rebuild and cache; per-event explanations (JSON, Markdown, arrays) |
 | `sathealth.pipeline.explain_eval` / `explain_report` | Pre-registered evaluation (E1–E4) → `docs/EXPLAINABILITY.md` |
-| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / explain / explain-report / leaderboard / info` |
+| `sathealth.ops` | `StreamingDecider` (step-by-step decision layer, exact batch parity), health index, trend extrapolation |
+| `sathealth.service` | SQLite store, replay engine, FastAPI app with SSE, web console, headless demo |
+| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / explain / explain-report / serve / demo / leaderboard / info` |
