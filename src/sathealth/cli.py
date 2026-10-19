@@ -9,6 +9,8 @@
     sathealth ablation   run every decision-layer variant and write docs/DECISION.md
     sathealth explain    explain every alarm event: onset, counterfactual, attribution, narrative
     sathealth explain-report  evaluate explanations and write docs/EXPLAINABILITY.md
+    sathealth confirm    pre-registered one-shot confirmation on OPS-SAT-AD → docs/CONFIRMATION.md
+    sathealth priming    pre-registered start-up priming test → docs/PRIMING.md
     sathealth serve      run the operations service and operator console (http://127.0.0.1:8000)
     sathealth demo       headless demo: replay → explained alert → operator verdict stored
     sathealth leaderboard  write the Markdown results table
@@ -173,6 +175,31 @@ def _cmd_explain_report(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_confirm(cfg: Config, args: argparse.Namespace) -> int:
+    from sathealth.pipeline.confirm import write_confirmation
+
+    try:
+        out = write_confirmation(cfg, args.out, jobs=args.jobs, download=not args.no_download)
+    except (FileNotFoundError, RuntimeError) as exc:
+        log.error("confirm failed", reason=str(exc))
+        return 1
+    log.info("wrote confirmation report", path=out)
+    return 0
+
+
+def _cmd_priming(cfg: Config, args: argparse.Namespace) -> int:
+    from sathealth.pipeline.priming import write_priming
+
+    primed = load_config(args.primed_config, args.overrides)
+    try:
+        out = write_priming(cfg, primed, args.out)
+    except FileNotFoundError as exc:
+        log.error("priming failed", reason=str(exc))
+        return 1
+    log.info("wrote priming report", path=out)
+    return 0
+
+
 def _cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -298,6 +325,15 @@ def build_parser() -> argparse.ArgumentParser:
     rep5 = sub.add_parser("explain-report", parents=[common], help="evaluate explanations")
     rep5.add_argument("--out", type=Path, default=Path("docs/EXPLAINABILITY.md"))
     rep5.add_argument("--jobs", type=int, default=1, help="channels processed in parallel")
+    conf = sub.add_parser("confirm", parents=[common], help="one-shot test on OPS-SAT-AD")
+    conf.add_argument("--out", type=Path, default=Path("docs/CONFIRMATION.md"))
+    conf.add_argument("--jobs", type=int, default=1, help="channels processed in parallel")
+    conf.add_argument(
+        "--no-download", action="store_true", help="use files already in confirmation.raw_dir"
+    )
+    prim = sub.add_parser("priming", parents=[common], help="start-up priming test")
+    prim.add_argument("--primed-config", type=Path, default=Path("configs/primed.yaml"))
+    prim.add_argument("--out", type=Path, default=Path("docs/PRIMING.md"))
     srv = sub.add_parser("serve", parents=[common], help="run the operations service")
     srv.add_argument("--host", default=None, help="override service.host")
     srv.add_argument("--port", type=int, default=None, help="override service.port")
@@ -320,6 +356,8 @@ _COMMANDS = {
     "ablation": _cmd_ablation,
     "explain": _cmd_explain,
     "explain-report": _cmd_explain_report,
+    "confirm": _cmd_confirm,
+    "priming": _cmd_priming,
     "serve": _cmd_serve,
     "demo": _cmd_demo,
     "leaderboard": _cmd_leaderboard,

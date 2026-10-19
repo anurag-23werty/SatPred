@@ -183,3 +183,24 @@ def test_demo_and_serve_commands(
     monkeypatch.setattr("uvicorn.run", lambda app, **kw: calls.append(kw))
     assert main(["serve", "--port", "8123", *args]) == 0
     assert calls == [{"host": "127.0.0.1", "port": 8123, "log_level": "warning"}]
+
+
+def test_confirm_command(opssat_csv: Path, tmp_path: Path) -> None:
+    args = ["--set", f"confirmation.raw_dir={opssat_csv.parent}"]
+    for key, value in (
+        ("confirmation.out_dir", tmp_path / "out"),
+        ("deep.training.epochs", 1),
+        ("deep.lstm.window", 16),
+        ("deep.lstm.hidden", 8),
+        ("deep.transformer.window", 16),
+        ("deep.transformer.d_model", 8),
+        ("deep.transformer.heads", 2),
+        ("deep.transformer.layers", 1),
+        ("evaluation.bootstrap", 20),
+    ):
+        args += ["--set", f"{key}={value}"]
+    out = tmp_path / "C.md"
+    assert main(["confirm", "--no-download", "--out", str(out), *args]) == 0
+    assert out.read_text().startswith("# Independent confirmation")
+    missing = ["--set", f"confirmation.raw_dir={tmp_path / 'none'}"]
+    assert main(["confirm", "--no-download", "--out", str(out), *missing]) == 1
