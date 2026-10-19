@@ -7,6 +7,7 @@ scores with a causal EWMA, and keeps the training history for the run directory.
 """
 
 from abc import abstractmethod
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Self
 
@@ -68,18 +69,36 @@ class DeepDetector(Detector):
         return self._model
 
     def fit(self, train: FloatArray, val: FloatArray) -> Self:
+        return self.fit_segments([train], [val])
+
+    def fit_segments(self, train: Sequence[FloatArray], val: Sequence[FloatArray]) -> Self:
+        """Fit on several separate pieces of nominal data; no window spans two pieces.
+
+        ``fit(train, val)`` is the one-piece case. Separate pieces matter when the data has
+        gaps (e.g. OPS-SAT's short telemetry segments): a window across a gap would teach the
+        model a jump that never happened.
+        """
+        n_features = int(train[0].shape[1])
         generator = seed_torch(self.seed, self.training.threads)
-        model = self._build(train.shape[1]).to(self.device)  # init after seeding
+        model = self._build(n_features).to(self.device)  # init after seeding
         self.history = train_model(
             model,
             self._loss,
-            self._tensor(self._windows(train)),
-            self._tensor(self._windows(val)),
+            self._tensor(self._stack(train, n_features)),
+            self._tensor(self._stack(val, n_features)),
             self.training,
             generator,
         )
-        self._model, self._n_features = model, int(train.shape[1])
+        self._model, self._n_features = model, n_features
         return self
+
+    def _stack(self, pieces: Sequence[FloatArray], n_features: int) -> FloatArray:
+        windows = [w for w in (self._windows(p) for p in pieces) if w.shape[0]]
+        if not windows:
+            empty: FloatArray = self._windows(np.zeros((0, n_features)))
+            return empty
+        stacked: FloatArray = np.concatenate(windows) if len(windows) > 1 else windows[0]
+        return stacked
 
     def score(self, x: FloatArray) -> FloatArray:
         model = self.model
