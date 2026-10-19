@@ -1,12 +1,13 @@
 [project]
 name = "sathealth"
-version = "0.1.0"
+version = "0.2.0"
 description = "Explainable AI for satellite health monitoring and early anomaly detection"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "numpy>=1.26,<3",
     "pydantic>=2.6,<3",
     "pyyaml>=6.0,<7",
+    "scikit-learn>=1.5,<2",
 ]
 
 [project.scripts]
@@ -44,6 +45,10 @@ strict = true
 mypy_path = "src"
 packages = ["sathealth"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "scipy.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
