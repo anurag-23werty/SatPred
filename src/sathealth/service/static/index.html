@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sathealth · operator console</title>
+  <link rel="stylesheet" href="/static/console.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">sat<span>health</span> <small>operator console</small></div>
+    <div class="replay">
+      <button id="play" type="button" aria-label="Pause or resume replay">Pause</button>
+      <button id="restart" type="button">Restart</button>
+      <label>Speed
+        <select id="speed" aria-label="Replay speed in steps per second">
+          <option value="5">5 steps/s</option>
+          <option value="20" selected>20 steps/s</option>
+          <option value="100">100 steps/s</option>
+          <option value="500">500 steps/s</option>
+        </select>
+      </label>
+      <div class="progress" aria-label="Replay progress"><div id="progress-fill"></div></div>
+      <span id="step" class="muted">step 0 / 0</span>
+      <span id="conn" class="conn" title="Live stream connection">●</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel health" aria-labelledby="health-title">
+      <h2 id="health-title">Health</h2>
+      <div class="hero">
+        <span id="healthy">–</span><small id="healthy-label">channels healthy (index ≥ 90)</small>
+        <small id="lowest" class="muted"></small>
+      </div>
+      <div id="subsystems" class="tiles"></div>
+      <p class="note">Health = 100 × (1 − severity-weighted share of the last 500 steps in alarm).
+        Subsystem = weakest channel of its family. Trends are extrapolations, not remaining-life
+        predictions.</p>
+    </section>
+
+    <section class="panel alerts" aria-labelledby="alerts-title">
+      <div class="panel-head">
+        <h2 id="alerts-title">Alerts</h2>
+        <select id="filter-status" aria-label="Filter by status">
+          <option value="">all</option><option value="open">open</option><option value="closed">closed</option>
+        </select>
+        <select id="filter-severity" aria-label="Filter by severity">
+          <option value="">any severity</option><option value="critical">critical</option>
+          <option value="warning">warning</option><option value="watch">watch</option>
+        </select>
+      </div>
+      <ul id="alert-list" class="alert-list"></ul>
+      <div id="feedback" class="feedback"></div>
+    </section>
+
+    <section class="panel detail" aria-labelledby="detail-title">
+      <h2 id="detail-title">Select an alert</h2>
+      <div id="detail-empty" class="muted">Alerts appear here as the replay raises them.</div>
+      <div id="detail" hidden>
+        <figure>
+          <figcaption>Telemetry value (dataset units)</figcaption>
+          <div id="chart-value" class="chart"></div>
+        </figure>
+        <figure>
+          <figcaption>Fused surprise (−log10 p); alarm at the dashed line</figcaption>
+          <div id="chart-surprise" class="chart"></div>
+        </figure>
+        <h3>Explanation</h3>
+        <div id="explanation" class="explanation"><span class="muted">Loading…</span></div>
+        <figure id="cf-figure" hidden>
+          <figcaption>Actual vs expected from the commands actually sent (90% band)</figcaption>
+          <div id="chart-cf" class="chart"></div>
+        </figure>
+        <h3>Operator verdict</h3>
+        <form id="verdict-form" class="verdict">
+          <input id="operator" name="operator" placeholder="Operator" required maxlength="64">
+          <input id="note" name="note" placeholder="Note (optional)" maxlength="2000">
+          <div class="buttons">
+            <button type="submit" value="confirmed">✓ Confirm anomaly</button>
+            <button type="submit" value="false_alarm">✗ False alarm</button>
+            <button type="submit" value="unsure">? Unsure</button>
+          </div>
+        </form>
+        <ul id="verdicts" class="verdicts"></ul>
+      </div>
+    </section>
+  </main>
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <script src="/static/console.js"></script>
+</body>
+</html>
