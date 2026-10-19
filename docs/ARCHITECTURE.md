@@ -2,7 +2,8 @@
 
 The target system has six layers. **Phase 1 implements L2** (ingest and preprocessing) for
 the NASA SMAP/MSL benchmark. **Phase 2 adds the evaluation harness and the L3 statistical
-baselines.** The other layers arrive in the phases listed in
+baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder).
+The other layers arrive in the phases listed in
 [ROADMAP.md](ROADMAP.md).
 
 ```mermaid
@@ -19,7 +20,7 @@ flowchart TB
     subgraph L3[L3 · Detection ensemble]
         M1[Statistical<br/>limits + Isolation Forest]
         M2[LSTM forecaster<br/>Telemanom-style]
-        M3[Transformer AE<br/>TranAD]
+        M3[Transformer AE<br/>bottlenecked]
         M4[Graph Deviation Network]
     end
     subgraph L4[L4 · Scoring & decision]
@@ -76,7 +77,9 @@ load_prepared() ───────► PreparedChannel.windows()    zero-copy 
 | `sathealth.evaluation.metrics` | Point, event-wise, composite and point-adjusted metrics; delays; AP; oracle |
 | `sathealth.evaluation.thresholds` | Label-free thresholds from nominal validation scores |
 | `sathealth.evaluation.aggregate` | Micro/macro aggregation, subsets, bootstrap CIs over channels |
-| `sathealth.detectors` | `Detector` interface, limit check, robust z-score, Isolation Forest, random, registry |
-| `sathealth.pipeline.evaluate` | Atomic, fingerprinted evaluation runs with saved scores |
-| `sathealth.pipeline.leaderboard` | `docs/BASELINES.md` generator |
+| `sathealth.detectors` | `Detector` interface, limit check, robust z-score, Isolation Forest, random, LSTM, Transformer, registry |
+| `sathealth.models` | PyTorch networks, training loop with early stopping, deterministic seeding, causal EWMA |
+| `sathealth.pipeline.evaluate` | Atomic, fingerprinted evaluation runs with saved scores; parallel over channels |
+| `sathealth.pipeline.leaderboard` | `docs/BASELINES.md` generator with paired comparisons vs the best baseline |
+| `sathealth.pipeline.tracking` | Optional MLflow logging of finished runs |
 | `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / leaderboard / info` |
