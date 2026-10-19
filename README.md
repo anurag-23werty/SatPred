@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="sathealth: a satellite streams telemetry; an explainable AI flags the stretch that drifts from nominal behaviour" width="100%">
+  <img src="docs/assets/banner.svg" alt="sathealth: a satellite in orbit above Earth, with its telemetry watched by an explainable AI that flags an early anomaly" width="100%">
 </p>
 
 # sathealth: explainable satellite health monitoring
