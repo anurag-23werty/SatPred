@@ -80,3 +80,26 @@ def test_deep_and_tracking_settings() -> None:
     assert load_config(DEFAULT) == load_config(None), "YAML mirrors the code defaults"
     with pytest.raises(ValidationError, match="divisible"):
         load_config(None, overrides=["deep.transformer.heads=5"])
+
+
+def test_decision_settings() -> None:
+    cfg = load_config(DEFAULT, overrides=["decision.fusion=max", "decision.prune=0.13"])
+    assert cfg.decision.fusion == "max"
+    assert cfg.decision.prune == 0.13
+    assert cfg.decision.inputs == ("lstm", "transformer")
+    assert load_config(DEFAULT) == load_config(None), "YAML mirrors the code defaults"
+    with pytest.raises(ValidationError, match="alarm_off"):
+        load_config(None, overrides=["decision.alarm_off=4"])
+    with pytest.raises(ValidationError, match="severity_warning"):
+        load_config(None, overrides=["decision.severity_warning=7"])
+    with pytest.raises(ValidationError):
+        load_config(None, overrides=["decision.name=Has Space"])
+
+
+def test_live_profile_only_adds_streaming_recalibration() -> None:
+    live = load_config(DEFAULT.parent / "live.yaml")
+    assert live.decision.name == "fused-adaptive"
+    assert live.decision.recalibrate_every == 100
+    assert live.decision.model_dump(exclude={"name", "recalibrate_every"}) == (
+        load_config(DEFAULT).decision.model_dump(exclude={"name", "recalibrate_every"})
+    )

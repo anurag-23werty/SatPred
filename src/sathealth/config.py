@@ -38,6 +38,7 @@ class PathsConfig(_Strict):
     raw_dir: Path = Path("data/raw/telemanom")
     processed_dir: Path = Path("data/processed")
     runs_dir: Path = Path("runs/evaluations")
+    decisions_dir: Path = Path("runs/decisions")
 
 
 class DatasetConfig(_Strict):
@@ -199,6 +200,61 @@ class TrackingConfig(_Strict):
     experiment: str = "sathealth"
 
 
+class DecisionConfig(_Strict):
+    """Decision layer on saved detector scores; see docs/adr/0006-decision-layer.md.
+
+    Every field is label-free. Defaults are the pre-registered primary configuration.
+    """
+
+    name: str = Field(default="fused", pattern=r"^[a-z0-9_+-]+$")
+    inputs: tuple[str, ...] = Field(default=("lstm", "transformer"), min_length=1)
+    calibration: Literal["evt", "ecdf", "none"] = "evt"
+    tail_quantile: float = Field(
+        default=0.95, gt=0.5, lt=1.0, description="POT threshold u on validation scores."
+    )
+    max_surprise: float = Field(default=12.0, gt=0, description="Cap on -log10 p.")
+    recalibrate_every: int | None = Field(
+        default=None,
+        ge=1,
+        description="Causal recalibration on recent non-alarm test scores every N steps "
+        "(streaming EVT, post-hoc variant); None keeps the validation calibration.",
+    )
+    recalibrate_window: int = Field(
+        default=2000, ge=50, description="Most recent nominal scores kept as reference."
+    )
+    fusion: Literal["mean", "max", "min"] = "mean"
+    threshold: Literal["hysteresis", "ndt"] = "hysteresis"
+    alarm_on: float = Field(default=3.0, gt=0, description="Enter alarm at surprise >= this.")
+    alarm_off: float = Field(default=2.0, gt=0, description="Leave alarm below this.")
+    merge_gap: int = Field(default=10, ge=0, description="Merge alarm runs this close.")
+    min_duration: int = Field(default=1, ge=1, description="Drop shorter alarm runs.")
+    prune: float | None = Field(
+        default=None,
+        ge=0,
+        lt=1,
+        description="Telemanom pruning: drop alarm runs whose peak is within this relative "
+        "margin of the next lower peak (0.13 in Hundman et al. 2018). Batch, not live.",
+    )
+    ndt_window: int = Field(default=2100, ge=10, description="NDT window (steps).")
+    ndt_step: int = Field(default=70, ge=1, description="NDT window stride (steps).")
+    severity_warning: float = Field(default=4.5, gt=0)
+    severity_critical: float = Field(default=6.0, gt=0)
+    point_margin: float = Field(
+        default=0.05, ge=0, description="Margin on the train range for the point-type rule."
+    )
+    alarm_budget: float = Field(
+        default=1.0, gt=0, description="Allowed false events per 1,000 steps (reported)."
+    )
+
+    @model_validator(mode="after")
+    def _check_levels(self) -> "DecisionConfig":
+        if self.alarm_off > self.alarm_on:
+            raise ValueError("decision.alarm_off must be <= decision.alarm_on")
+        if self.severity_warning > self.severity_critical:
+            raise ValueError("decision.severity_warning must be <= decision.severity_critical")
+        return self
+
+
 class Config(_Strict):
     seed: int = 42
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -212,6 +268,7 @@ class Config(_Strict):
     baselines: BaselinesConfig = BaselinesConfig()
     deep: DeepConfig = DeepConfig()
     tracking: TrackingConfig = TrackingConfig()
+    decision: DecisionConfig = DecisionConfig()
 
     @model_validator(mode="after")
     def _check_columns(self) -> "Config":

@@ -7,6 +7,7 @@ paths:
   raw_dir: data/raw/telemanom      # verified raw .npy files + labeled_anomalies.csv
   processed_dir: data/processed    # one sub-directory per config fingerprint
   runs_dir: runs/evaluations       # one sub-directory per detector + settings fingerprint
+  decisions_dir: runs/decisions    # one sub-directory per decision pipeline + fingerprint
 
 dataset:
   name: telemanom                  # NASA SMAP + MSL (Hundman et al., KDD 2018)
@@ -90,3 +91,25 @@ deep:                              # one model per channel, fit on train, early-
 tracking:
   mlflow_uri: null                 # e.g. file:./mlruns (needs `uv sync --extra tracking`)
   experiment: sathealth
+
+decision:                          # see docs/adr/0006-decision-layer.md (pre-registered)
+  name: fused
+  inputs: [lstm, transformer]      # detectors whose saved scores are combined
+  calibration: evt                 # evt (POT/GPD tail) | ecdf | none (raw scores)
+  tail_quantile: 0.95              # POT threshold u on validation scores
+  max_surprise: 12.0               # cap on -log10 tail probability
+  recalibrate_every: null          # e.g. 100: streaming recalibration (post-hoc variant)
+  recalibrate_window: 2000         # recent non-alarm scores used as the nominal reference
+  fusion: mean                     # mean | max | min of surprises
+  threshold: hysteresis            # hysteresis (live) | ndt (Telemanom, batch)
+  alarm_on: 3.0                    # enter alarm at surprise >= 3 (p <= 1e-3)
+  alarm_off: 2.0                   # leave alarm below 2 (p > 1e-2)
+  merge_gap: 10                    # merge alarm runs this many steps apart
+  min_duration: 1
+  prune: null                      # Telemanom pruning margin, e.g. 0.13 (batch)
+  ndt_window: 2100
+  ndt_step: 70
+  severity_warning: 4.5
+  severity_critical: 6.0
+  point_margin: 0.05               # point type: value beyond train range ± 5%
+  alarm_budget: 1.0                # false events per 1k steps we accept

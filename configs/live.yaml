@@ -1,0 +1,11 @@
+# Live-operations profile: the default config plus causal streaming recalibration.
+#   sathealth decide --config configs/live.yaml
+#
+# The default config keeps the pre-registered Phase 4 pipeline so its verdict stays
+# reproducible. This profile adds the post-hoc streaming recalibration (docs/adr/0006),
+# which is causal and was the strongest live variant on SMAP/MSL, but it is not yet
+# confirmed on independent data (planned for Phase 7).
+decision:
+  name: fused-adaptive
+  recalibrate_every: 100
+  recalibrate_window: 2000
