@@ -68,3 +68,8 @@ def test_write_report_end_to_end(explain_config: Config, tmp_path: Path) -> None
     (evaluation,) = explain_config.paths.explanations_dir.glob("*/evaluation.json")
     results = json.loads(evaluation.read_text())
     assert results["grounding"]["violations"] == 0
+
+
+def test_report_has_no_trailing_whitespace(explain_config: Config, tmp_path: Path) -> None:
+    text = write_report(explain_config, tmp_path / "docs" / "E.md").read_text()
+    assert all(line == line.rstrip() for line in text.splitlines())

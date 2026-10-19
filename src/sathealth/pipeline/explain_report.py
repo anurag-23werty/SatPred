@@ -339,7 +339,9 @@ def render_report(
         ]
         if figure_path:
             lines += [f"![Counterfactual for channel {example['chan_id']}]({figure_path})", ""]
-        lines += [f"> {s['text']}" + "  " for s in example["sentences"]]
+        # one quoted paragraph per sentence; no trailing-space line breaks (hooks strip them)
+        quoted = [f"> {s['text']}" for s in example["sentences"]]
+        lines += [part for line in quoted for part in (line, ">")][:-1]
     lines.append("")
     return "\n".join(lines)
 

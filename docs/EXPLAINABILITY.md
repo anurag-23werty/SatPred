@@ -63,10 +63,16 @@ The highest-surprise contextual event that overlaps a labelled anomaly (labels a
 
 ![Counterfactual for channel G-7](assets/explanation-example.svg)
 
-> Critical alert on channel G-7 (SMAP): contextual anomaly from step 7596 to 7697 (102 steps).  
-> At its peak, step 7667, the behaviour was rarer than 1 in 3,300,000,000 nominal steps (surprise 9.5).  
-> The deviation began at step 7594, 2 steps before the alarm was raised.  
-> Both detectors flagged it: reconstruction (Transformer) surprise 12.0, forecast (LSTM) surprise 7.0.  
-> Given the commands actually sent, the value was expected to stay between 0.99 and 1.01; it reached -0.20, outside the 90% band for 44% of the first 104 steps.  
-> The forecast error at the peak is driven mostly by the channel's own recent values (100% of the attribution), most strongly 2 steps before the peak.  
-> Every reading stayed within the training range; only the pattern was abnormal, which a limit check cannot see.  
+> Critical alert on channel G-7 (SMAP): contextual anomaly from step 7596 to 7697 (102 steps).
+>
+> At its peak, step 7667, the behaviour was rarer than 1 in 3,300,000,000 nominal steps (surprise 9.5).
+>
+> The deviation began at step 7594, 2 steps before the alarm was raised.
+>
+> Both detectors flagged it: reconstruction (Transformer) surprise 12.0, forecast (LSTM) surprise 7.0.
+>
+> Given the commands actually sent, the value was expected to stay between 0.99 and 1.01; it reached -0.20, outside the 90% band for 44% of the first 104 steps.
+>
+> The forecast error at the peak is driven mostly by the channel's own recent values (100% of the attribution), most strongly 2 steps before the peak.
+>
+> Every reading stayed within the training range; only the pattern was abnormal, which a limit check cannot see.
