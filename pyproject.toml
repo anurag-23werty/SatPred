@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tracking = ["mlflow>=2.14,<4"]
+llm = ["anthropic>=1,<2"]
 
 [project.scripts]
 sathealth = "sathealth.cli:main"
