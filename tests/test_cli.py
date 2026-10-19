@@ -126,3 +126,33 @@ def test_decide_ablation_and_leaderboard_with_decision(
     assert main(["leaderboard", "baselines", "--with-decision", "--out", str(board), *args]) == 0
     assert "| fused |" in board.read_text()
     assert main(["ablation", "--out", str(tmp_path / "d.md"), *args]) == 1, "needs deep runs"
+
+
+def test_explain_commands(raw_root: Path, tmp_path: Path) -> None:
+    args = [*_args(raw_root, tmp_path)]
+    for key, value in (
+        ("paths.runs_dir", tmp_path / "runs"),
+        ("paths.decisions_dir", tmp_path / "decisions"),
+        ("paths.models_dir", tmp_path / "models"),
+        ("paths.explanations_dir", tmp_path / "explanations"),
+        ("deep.training.epochs", 2),
+        ("deep.lstm.window", 16),
+        ("deep.lstm.hidden", 8),
+        ("decision.inputs", "[lstm]"),
+        ("explain.horizon", 20),
+        ("explain.band_starts", 5),
+        ("explain.ig_steps", 8),
+        ("explain.eval_injections", 2),
+        ("explain.eval_coverage_horizon", 10),
+        ("explain.eval_channels_per_spacecraft", 1),
+        ("evaluation.bootstrap", 10),
+    ):
+        args += ["--set", f"{key}={value}"]
+    assert main(["prepare", "--skip-verify", *args]) == 0
+    assert main(["explain", *args]) == 1, "no decision run yet"
+    assert main(["explain-report", "--out", str(tmp_path / "e.md"), *args]) == 1
+    assert main(["evaluate", "lstm", *args]) == 0
+    assert main(["decide", *args]) == 0
+    assert main(["explain", "--channel", "A-1", *args]) == 0
+    assert main(["explain-report", "--out", str(tmp_path / "e.md"), *args]) == 0
+    assert "## Hypotheses" in (tmp_path / "e.md").read_text()

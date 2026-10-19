@@ -7,6 +7,8 @@
     sathealth evaluate   score detectors under the fixed evaluation protocol
     sathealth decide     run the decision layer (calibrate, fuse, alarm, events) on saved scores
     sathealth ablation   run every decision-layer variant and write docs/DECISION.md
+    sathealth explain    explain every alarm event: onset, counterfactual, attribution, narrative
+    sathealth explain-report  evaluate explanations and write docs/EXPLAINABILITY.md
     sathealth leaderboard  write the Markdown results table
     sathealth info       print the resolved config and where outputs go
 
@@ -30,6 +32,8 @@ from sathealth.logging import configure_logging, get_logger
 from sathealth.pipeline.ablation import write_ablation
 from sathealth.pipeline.decide import decide
 from sathealth.pipeline.evaluate import evaluate_detector
+from sathealth.pipeline.explain import explain_run
+from sathealth.pipeline.explain_report import write_report
 from sathealth.pipeline.leaderboard import write_leaderboard
 from sathealth.pipeline.prepare import (
     DataIntegrityError,
@@ -147,6 +151,26 @@ def _cmd_ablation(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_explain(cfg: Config, args: argparse.Namespace) -> int:
+    try:
+        out = explain_run(cfg, channels=args.channel or None, jobs=args.jobs)
+    except (FileNotFoundError, RuntimeError) as exc:
+        log.error("explain failed", reason=str(exc))
+        return 1
+    print(out)
+    return 0
+
+
+def _cmd_explain_report(cfg: Config, args: argparse.Namespace) -> int:
+    try:
+        out = write_report(cfg, args.out, jobs=args.jobs)
+    except (FileNotFoundError, RuntimeError) as exc:
+        log.error("explain-report failed", reason=str(exc))
+        return 1
+    log.info("wrote explainability report", path=out)
+    return 0
+
+
 def _cmd_leaderboard(cfg: Config, args: argparse.Namespace) -> int:
     names = _detectors(args.detectors) + ([cfg.decision.name] if args.with_decision else [])
     try:
@@ -221,6 +245,14 @@ def build_parser() -> argparse.ArgumentParser:
     abl = sub.add_parser("ablation", parents=[common], help="run all decision variants")
     abl.add_argument("--out", type=Path, default=Path("docs/DECISION.md"))
     abl.add_argument("--force", action="store_true", help="re-run even if results exist")
+    exp = sub.add_parser("explain", parents=[common], help="explain alarm events")
+    exp.add_argument(
+        "--channel", action="append", default=[], help="only this channel (repeatable)"
+    )
+    exp.add_argument("--jobs", type=int, default=1, help="channels explained in parallel")
+    rep5 = sub.add_parser("explain-report", parents=[common], help="evaluate explanations")
+    rep5.add_argument("--out", type=Path, default=Path("docs/EXPLAINABILITY.md"))
+    rep5.add_argument("--jobs", type=int, default=1, help="channels processed in parallel")
     sub.add_parser("info", parents=[common], help="print resolved config and run directory")
     return parser
 
@@ -233,6 +265,8 @@ _COMMANDS = {
     "evaluate": _cmd_evaluate,
     "decide": _cmd_decide,
     "ablation": _cmd_ablation,
+    "explain": _cmd_explain,
+    "explain-report": _cmd_explain_report,
     "leaderboard": _cmd_leaderboard,
     "info": _cmd_info,
 }
