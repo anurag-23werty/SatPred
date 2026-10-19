@@ -20,6 +20,7 @@ from sathealth.evaluation.aggregate import (
     paired_composite_delta,
     paired_mean_delta,
 )
+from sathealth.pipeline.decide import decision_dir_for
 from sathealth.pipeline.evaluate import SUMMARY_FILE, evaluation_dir_for
 
 COMPARISON_SUBSETS = ("all", "SMAP", "MSL")
@@ -39,13 +40,21 @@ _DESCRIPTIONS = {
 }
 
 
+def run_dir(config: Config, name: str) -> Path:
+    """Where ``name`` lives: the configured decision pipeline or a detector evaluation."""
+    if name == config.decision.name:
+        return decision_dir_for(config)
+    return evaluation_dir_for(config, name)
+
+
 def load_summaries(config: Config, detectors: Sequence[str]) -> list[dict[str, Any]]:
     """Summaries evaluated under the *current* config; missing runs are an error."""
     summaries = []
     for name in detectors:
-        path = evaluation_dir_for(config, name) / SUMMARY_FILE
+        path = run_dir(config, name) / SUMMARY_FILE
         if not path.is_file():
-            raise FileNotFoundError(f"no evaluation for {name!r}; run `sathealth evaluate {name}`")
+            command = "decide" if name == config.decision.name else f"evaluate {name}"
+            raise FileNotFoundError(f"no results for {name!r}; run `sathealth {command}`")
         summaries.append(json.loads(path.read_text()))
     return summaries
 
@@ -80,9 +89,7 @@ def compare_with_baselines(
     if not baselines:
         return []
     per_channel = {
-        s["detector"]: json.loads(
-            (evaluation_dir_for(config, s["detector"]) / "per_channel.json").read_text()
-        )
+        s["detector"]: json.loads((run_dir(config, s["detector"]) / "per_channel.json").read_text())
         for s in summaries
     }
     rows = []
@@ -229,7 +236,8 @@ def render_leaderboard(
         "|---|---|---:|",
     ]
     lines += [
-        f"| {s['detector']} | {_DESCRIPTIONS.get(s['detector'], '')} | {_wall_time(s)} |"
+        f"| {s['detector']} | {s.get('description') or _DESCRIPTIONS.get(s['detector'], '')} "
+        f"| {_wall_time(s)} |"
         for s in ranked
     ]
     if comparisons:
