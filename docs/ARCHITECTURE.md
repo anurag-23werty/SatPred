@@ -2,8 +2,9 @@
 
 The target system has six layers. **Phase 1 implements L2** (ingest and preprocessing) for
 the NASA SMAP/MSL benchmark. **Phase 2 adds the evaluation harness and the L3 statistical
-baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder) **and
-Phase 4 the L4 decision layer** (EVT calibration, fusion, alarms, events).
+baselines. Phase 3 adds the L3 deep detectors** (LSTM forecaster, Transformer autoencoder) **,
+Phase 4 the L4 decision layer** (EVT calibration, fusion, alarms, events) **and Phase 5 the
+L5 explanation engine** (onset, counterfactual, attribution, grounded narrative).
 The other layers arrive in the phases listed in
 [ROADMAP.md](ROADMAP.md).
 
@@ -28,7 +29,7 @@ flowchart TB
         NORM[EVT calibration<br/>surprise = −log10 p] --> FUSE[Fusion<br/>mean surprise] --> THR[Alarm rule<br/>hysteresis · streaming recalibration] --> EVT[Event builder] --> SEV[Severity + type]
     end
     subgraph L5[L5 · Explain & prognose]
-        XAI[XAI engine<br/>attribution · onset · broken edges ·<br/>counterfactual band · grounded narrator]
+        XAI[XAI engine<br/>onset · counterfactual rollout + band ·<br/>Integrated Gradients · grounded narrator]
         HI[Health Index + RUL]
     end
     subgraph L6[L6 · Operate & learn]
@@ -86,4 +87,7 @@ load_prepared() ───────► PreparedChannel.windows()    zero-copy 
 | `sathealth.decision` | EVT tail calibration, fusion, hysteresis and dynamic-threshold alarms, streaming recalibration, events with severity and type |
 | `sathealth.pipeline.decide` | Decision runs on saved scores: events, fused surprise, diagnostics, global oracle |
 | `sathealth.pipeline.ablation` | Pre-registered decision variants → `docs/DECISION.md` |
-| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / leaderboard / info` |
+| `sathealth.explain` | Onset, counterfactual rollout and band, Integrated Gradients, grounded narrative and checker, optional grounded LLM rewording |
+| `sathealth.pipeline.explain` | Verified model rebuild and cache; per-event explanations (JSON, Markdown, arrays) |
+| `sathealth.pipeline.explain_eval` / `explain_report` | Pre-registered evaluation (E1–E4) → `docs/EXPLAINABILITY.md` |
+| `sathealth.cli` | `sathealth download / verify / prepare / report / evaluate / decide / ablation / explain / explain-report / leaderboard / info` |

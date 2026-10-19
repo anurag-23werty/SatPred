@@ -12,9 +12,10 @@ broken relationships between channels, and they never say *why*. sathealth combi
 ensemble of detectors with an explainability layer, so each alert says which channel, when
 the problem started, which dependency broke and what normal would have looked like.
 
-> **Status: Phase 4 (decision layer) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md), the
-> detector results in [docs/BASELINES.md](docs/BASELINES.md) and the decision-layer results
-> in [docs/DECISION.md](docs/DECISION.md).
+> **Status: Phase 5 (explainability) complete.** See [docs/ROADMAP.md](docs/ROADMAP.md) and
+> the results in [BASELINES.md](docs/BASELINES.md) (detectors),
+> [DECISION.md](docs/DECISION.md) (alarms) and [EXPLAINABILITY.md](docs/EXPLAINABILITY.md)
+> (explanations).
 
 ## Quickstart
 
@@ -27,6 +28,7 @@ make prepare     # validate → split → scale → data/processed/telemanom-<fi
 make evaluate-baselines  # classical baselines (~20 s)
 make leaderboard # every detector incl. deep models → docs/BASELINES.md (~1 h on 4 cores)
 make ablation    # every decision-layer variant on saved scores → docs/DECISION.md (seconds)
+make explain     # explain live alarms + evaluate → docs/EXPLAINABILITY.md (~10 min first time)
 make check       # ruff + mypy --strict + unit tests
 make test-data   # integration tests against the real dataset
 ```
@@ -116,6 +118,32 @@ type and evidence ([ADR 0006](docs/adr/0006-decision-layer.md),
 - **Anomaly type** (point vs contextual) matches the labels 80% of the time (majority class:
   68%).
 
+## Explainable alerts (Phase 5)
+
+Every alarm comes with an explanation an operator can check
+([ADR 0007](docs/adr/0007-explainability.md), [full results](docs/EXPLAINABILITY.md)):
+
+![Explained anomaly on channel G-7](docs/assets/explanation-example.svg)
+
+> Critical alert on channel G-7 (SMAP): contextual anomaly from step 7596 to 7697 (102 steps).
+> At its peak, step 7667, the behaviour was rarer than 1 in 3,300,000,000 nominal steps
+> (surprise 9.5). The deviation began at step 7594, 2 steps before the alarm was raised.
+> Both detectors flagged it: reconstruction (Transformer) surprise 12.0, forecast (LSTM)
+> surprise 7.0. Given the commands actually sent, the value was expected to stay between
+> 0.99 and 1.01; it reached -0.20, outside the 90% band for 44% of the first 104 steps. The
+> forecast error at the peak is driven mostly by the channel's own recent values (100% of
+> the attribution), most strongly 2 steps before the peak. Every reading stayed within the
+> training range; only the pattern was abnormal, which a limit check cannot see.
+
+- **Grounded by construction:** every number in every sentence is checked against the
+  computed facts. 1,373 of 1,373 sentences pass. An optional Claude rewording
+  (`explain.llm`) is shown only if it passes the same check.
+- **The right model:** the explainer rebuilds each LSTM and verifies it reproduces the saved
+  scores before explaining anything (70 of 70 channels).
+- **Honest evaluation:** attribution finds injected causes well above chance, but two of the
+  four pre-registered hypotheses failed. Diagnosing them showed the LSTM ignores the
+  commands, which sets up Phase 7.
+
 ## What we found in the data
 
 - The original NASA archive is offline (HTTP 403). A naive parallel download **silently
@@ -142,9 +170,10 @@ src/sathealth/
   evaluation/      metrics, label-free thresholds, aggregation + bootstrap CIs
   detectors/       limit check, robust z-score, Isolation Forest, random, LSTM, Transformer
   decision/        EVT calibration, fusion, alarm rules, streaming recalibration, events
+  explain/         onset, counterfactual, Integrated Gradients, grounded narrative, LLM
   models/          PyTorch networks, training loop, device and seeding, error smoothing
-  pipeline/        prepare, evaluate, decide, ablation, data card, leaderboard, tracking
-  utils/           hashing, seeding, provenance
+  pipeline/        prepare, evaluate, decide, ablation, explain, reports, leaderboard
+  utils/           hashing, seeding, provenance, parallel map
 tests/             unit tests + integration/ (real data, `-m data`)
 ```
 
