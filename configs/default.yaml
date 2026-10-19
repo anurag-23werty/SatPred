@@ -132,3 +132,15 @@ explain:                           # see docs/adr/0007-explainability.md (pre-re
   eval_min_effect: 0.05
   eval_deletion_fraction: 0.05
   eval_coverage_horizon: 100
+
+service:                           # see docs/adr/0008-operations-service.md
+  host: 127.0.0.1
+  port: 8000
+  db_path: runs/service/sathealth.db
+  channels: null                   # null = every prepared channel
+  speed: 20.0                      # replayed steps per second
+  tick_s: 0.1
+  health_window: 500               # steps in the rolling health index
+  health_sample_every: 50
+  health_threshold: 50.0           # trend extrapolation target
+  show_labels: false               # expose NASA labels (evaluation/demo only)

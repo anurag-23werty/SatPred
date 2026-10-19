@@ -285,6 +285,27 @@ class ExplainConfig(_Strict):
     eval_coverage_horizon: int = Field(default=100, ge=10)
 
 
+class ServiceConfig(_Strict):
+    """Operations service; see docs/adr/0008-operations-service.md."""
+
+    host: str = "127.0.0.1"
+    port: int = Field(default=8000, ge=1, le=65535)
+    db_path: Path = Path("runs/service/sathealth.db")
+    channels: tuple[str, ...] | None = Field(
+        default=None, description="Channels to replay; None means every prepared channel."
+    )
+    speed: float = Field(default=20.0, gt=0, description="Replayed steps per second.")
+    tick_s: float = Field(default=0.1, gt=0, le=5, description="Replay scheduling interval.")
+    health_window: int = Field(default=500, ge=10)
+    health_sample_every: int = Field(default=50, ge=1)
+    health_threshold: float = Field(default=50.0, gt=0, lt=100)
+    show_labels: bool = Field(
+        default=False,
+        description="Expose NASA's anomaly labels in the telemetry API (evaluation and demos "
+        "only: a live mission has no labels).",
+    )
+
+
 class Config(_Strict):
     seed: int = 42
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -300,6 +321,7 @@ class Config(_Strict):
     tracking: TrackingConfig = TrackingConfig()
     decision: DecisionConfig = DecisionConfig()
     explain: ExplainConfig = ExplainConfig()
+    service: ServiceConfig = ServiceConfig()
 
     @model_validator(mode="after")
     def _check_columns(self) -> "Config":
